@@ -1,0 +1,21 @@
+{
+  "workflow": "auto-summary",
+  "allowBrowserCookies": false,
+  "searchModel": "gemini-3.8-flash",
+  "searchRouting": {
+    "providers": [
+      "gemini"
+    ],
+    "fallbackOn": [
+      "transient",
+      "quota",
+      "network",
+      "invalid-response"
+    ]
+  },
+  "ssrf": {
+    "allowRanges": [
+      "198.18.0.0/15"
+    ]
+  }
+}

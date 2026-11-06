@@ -1,0 +1,39 @@
+{
+  "$schema": "https://pi.dev/schemas/settings.schema.json",
+  "theme": "system",
+  "defaultProvider": "antigravity",
+  "defaultModel": "gemini-3.8-flash",
+  "defaultThinkingLevel": "medium",
+  "enabledModels": [
+    "antigravity/gemini-3.8-flash",
+    "antigravity/gemini-4-argon",
+    "deepseek/deepseek-v4-pro",
+    "deepseek/deepseek-flash",
+    "cursor/default"
+  ],
+  "tuiMode": "fullscreen",
+  "fullscreenScrollbar": "auto",
+  "showHardwareCursor": true,
+  "externalEditor": "nvim",
+  "autocompleteMaxVisible": 8,
+  "collapseChangelog": true,
+  "treeFilterMode": "no-tools",
+  "steeringMode": "all",
+  "followUpMode": "all",
+  "defaultTools": [
+    "+codemode"
+  ],
+  "compaction": {
+    "keepRecentTokens": 80000
+  },
+  "packages": [
+    "npm:pi-web-access",
+    "npm:@juicesharp/rpiv-ask-user-question",
+    "git:github.com/badlogic/pi-subagent",
+    "npm:@ff-labs/pi-fff",
+    "npm:pi-cursor-sdk",
+    "npm:pi-antigravity",
+    "npm:@sentiolabs/pi-frontend-design"
+  ],
+  "extensions": []
+}

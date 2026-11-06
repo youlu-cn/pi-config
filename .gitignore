@@ -1,0 +1,32 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# Sensitive credentials & runtime accounts
+auth.json
+antigravity-accounts.json
+cursor-sdk*.json
+models.json
+*.key
+*.pem
+.env
+.env.*
+
+# Runtime, session & cache data
+sessions/
+cache/
+state/
+web-search-cache/
+run-history.jsonl
+models-store.json
+npm/
+git/
+*.log
+
+# Backups
+*.bak
+*.bak.*
+*.backup
+
+# Node
+node_modules/

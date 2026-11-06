@@ -1,0 +1,36 @@
+{
+  "$schema": "https://pi.dev/schemas/models.schema.json",
+  "providers": {
+    "openai-codex": {
+      "modelOverrides": {
+        "gpt-6-astra": {
+          "contextWindow": 500000
+        },
+        "gpt-6.1-sol": {
+          "contextWindow": 500000
+        }
+      }
+    },
+    "custom-openai": {
+      "name": "Custom OpenAI Compatible",
+      "baseUrl": "https://api.example.com/v1",
+      "apiKey": "$CUSTOM_API_KEY",
+      "api": "openai-completions",
+      "models": [
+        {
+          "id": "custom-model",
+          "name": "Custom Model",
+          "reasoning": true,
+          "contextWindow": 128000,
+          "maxTokens": 16384,
+          "cost": {
+            "input": 0.5,
+            "output": 1.5,
+            "cacheRead": 0.1,
+            "cacheWrite": 0.5
+          }
+        }
+      ]
+    }
+  }
+}
