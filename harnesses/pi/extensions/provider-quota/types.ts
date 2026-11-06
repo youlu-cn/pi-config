@@ -6,6 +6,7 @@ export interface QuotaWindow {
 	kind: QuotaWindowKind;
 	label: string;
 	groupId?: string;
+	groupLabel?: string;
 	modelKeys?: string[];
 	remainingPercent: number; // 0..100
 	usedPercent?: number;

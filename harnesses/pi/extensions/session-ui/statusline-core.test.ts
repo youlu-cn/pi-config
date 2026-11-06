@@ -145,6 +145,14 @@ test("subscription usage event is decoded and sorted by canonical window", () =>
 				windowMinutes: 43_200,
 			},
 			{
+				kind: "daily",
+				label: "1d",
+				remainingPercent: 75,
+				usedPercent: 25,
+				displayPercent: 25,
+				windowMinutes: 1_440,
+			},
+			{
 				kind: "weekly",
 				label: "1w",
 				remainingPercent: 70,
@@ -166,12 +174,12 @@ test("subscription usage event is decoded and sorted by canonical window", () =>
 	});
 	assert.deepEqual(
 		view?.windows.map((window) => window.label),
-		["5h", "1w", "1m"],
+		["5h", "1d", "1w", "1m"],
 	);
 	assert.equal(view?.displayMode, "used");
 	assert.deepEqual(
 		view?.windows.map((window) => window.displayPercent),
-		[20, 30, 40],
+		[20, 25, 30, 40],
 	);
 	assert.equal(view?.windows[0]?.resetsAt, 1_800_000_000);
 	assert.equal(view?.windows[0]?.resetCountdown, "2h13m");

@@ -12,6 +12,7 @@ export interface StatuslineLayoutItem {
 
 export type SubscriptionUsageWindowKind =
 	| "hourly"
+	| "daily"
 	| "weekly"
 	| "monthly"
 	| "rolling"
@@ -152,6 +153,7 @@ function isSubscriptionUsageWindowKind(
 ): value is SubscriptionUsageWindowKind {
 	return (
 		value === "hourly" ||
+		value === "daily" ||
 		value === "weekly" ||
 		value === "monthly" ||
 		value === "rolling" ||
@@ -171,7 +173,7 @@ function isUsagePercent(value: unknown): value is number {
 function subscriptionUsageWindowRank(
 	kind: SubscriptionUsageWindowKind,
 ): number {
-	if (kind === "hourly" || kind === "rolling") return 0;
+	if (kind === "hourly" || kind === "daily" || kind === "rolling") return 0;
 	if (kind === "weekly") return 1;
 	if (kind === "monthly") return 2;
 	return 3;

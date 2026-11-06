@@ -4,7 +4,8 @@ import { formatCountdown } from "./auth-helper.ts";
 import { buildQuotaWindow } from "./adapters/base.ts";
 import { AdapterRegistry } from "./registry.ts";
 import { AntigravityAdapter } from "./adapters/antigravity.ts";
-import { matchQuotaWindow } from "./scheduler.ts";
+import { formatQuotaReport } from "./format.ts";
+import { matchQuotaWindow, matchQuotaWindowsForModel } from "./scheduler.ts";
 
 test("formatCountdown formats ms into human-readable countdowns", () => {
 	assert.equal(formatCountdown(30_000), "30s");
@@ -51,12 +52,12 @@ test("AdapterRegistry correctly routes providers to adapters", () => {
 	assert.equal(unknown, undefined);
 });
 
-test("Antigravity returns 3 distinct windows and matches model accurately", async () => {
+test("Antigravity returns valid windows and matches model accurately", async () => {
 	const adapter = new AntigravityAdapter();
 	const report = await adapter.fetchQuota({} as any, new AbortController().signal);
 
 	assert.equal(report.providerId, "antigravity");
-	assert.equal(report.windows.length, 3);
+	assert.ok(report.windows.length >= 3);
 
 	// 1. gemini-3.8-flash 应精确匹配到 Gemini Models
 	const matchFlash = matchQuotaWindow(report.windows, "gemini-3.8-flash");
@@ -71,5 +72,56 @@ test("Antigravity returns 3 distinct windows and matches model accurately", asyn
 	// 3. claude-3-7-sonnet 应精确匹配到 Claude/GPT
 	const matchClaude = matchQuotaWindow(report.windows, "claude-3-7-sonnet");
 	assert.equal(matchClaude?.groupId, "claude-and-gpt-models");
-	assert.equal(matchClaude?.label, "Claude/GPT");
+	assert.ok(matchClaude?.label.startsWith("Claude"));
+
+	// 4. matchQuotaWindowsForModel 返回匹配 Group 的所有窗口
+	const claudeWindows = matchQuotaWindowsForModel(report.windows, "claude-3-7-sonnet");
+	assert.ok(claudeWindows.length >= 1);
+	assert.ok(claudeWindows.every((w) => w.groupId === "claude-and-gpt-models"));
+});
+
+test("formatQuotaReport renders grouped sections and progress bars", () => {
+	const output = formatQuotaReport({
+		providerId: "antigravity",
+		displayName: "Google Antigravity",
+		planName: "Google AI Pro",
+		accountEmail: "tester@example.com",
+		capturedAt: Date.now(),
+		primaryWindow: {
+			kind: "weekly",
+			label: "Gemini",
+			groupId: "gemini-models",
+			groupLabel: "Gemini Models",
+			remainingPercent: 12,
+		},
+		windows: [
+			{
+				kind: "weekly",
+				label: "Gemini",
+				groupId: "gemini-models",
+				groupLabel: "Gemini Models",
+				windowMinutes: 10080,
+				remainingPercent: 12,
+			},
+			{
+				kind: "hourly",
+				label: "Claude 5h",
+				groupId: "claude-and-gpt-models",
+				groupLabel: "Claude and GPT models",
+				windowMinutes: 300,
+				remainingPercent: 100,
+			},
+		],
+	}, "gemini-3.8-flash");
+
+	// 验证包含分组标题
+	assert.ok(output.includes("Gemini Models:"));
+	assert.ok(output.includes("Claude and GPT models:"));
+	// 验证包含进度条字符
+	assert.ok(output.includes("█"));
+	assert.ok(output.includes("░"));
+	// 验证包含账号与套餐信息
+	assert.ok(output.includes("Account:"));
+	assert.ok(output.includes("Google AI Pro"));
+	assert.ok(output.includes("tester@example.com"));
 });

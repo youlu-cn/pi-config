@@ -1,7 +1,7 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { createTimeoutSignal } from "./auth-helper.ts";
 import type { AdapterRegistry } from "./registry.ts";
-import type { ProviderQuotaReport } from "./types.ts";
+import type { ProviderQuotaReport, QuotaWindow } from "./types.ts";
 
 export const SUBSCRIPTION_USAGE_EVENT = "subscription-usage/status/v1";
 
@@ -10,31 +10,44 @@ interface CacheEntry {
 	expiresAt: number;
 }
 
-/** Match best quota window for the given model ID */
-export function matchQuotaWindow(windows: QuotaWindow[], modelId?: string): QuotaWindow | undefined {
-	if (!windows || windows.length === 0) return undefined;
-	if (!modelId || windows.length === 1) return windows[0];
+/** Match best quota windows for the given model ID (returns all windows in matched group) */
+export function matchQuotaWindowsForModel(
+	windows: QuotaWindow[],
+	modelId?: string,
+): QuotaWindow[] {
+	if (!windows || windows.length === 0) return [];
+	if (!modelId || windows.length === 1) return windows;
 
 	const normalized = modelId.toLowerCase();
-	const matches: { window: QuotaWindow; matchLength: number }[] = [];
+	let bestGroupId: string | undefined;
+	let maxMatchLen = 0;
 
 	for (const win of windows) {
 		if (!win.modelKeys || win.modelKeys.length === 0) continue;
 		for (const key of win.modelKeys) {
 			const k = key.toLowerCase();
-			if (normalized.includes(k)) {
-				matches.push({ window: win, matchLength: k.length });
+			if (normalized.includes(k) && k.length > maxMatchLen) {
+				maxMatchLen = k.length;
+				bestGroupId = win.groupId;
 			}
 		}
 	}
 
-	if (matches.length > 0) {
-		// 最具体（匹配 key 最长）的窗口优先级最高
-		matches.sort((a, b) => b.matchLength - a.matchLength);
-		return matches[0]!.window;
+	if (bestGroupId) {
+		const groupWindows = windows.filter((w) => w.groupId === bestGroupId);
+		if (groupWindows.length > 0) return groupWindows;
 	}
 
-	return windows[0];
+	return [windows[0]!];
+}
+
+/** Match best single quota window for backward compatibility */
+export function matchQuotaWindow(
+	windows: QuotaWindow[],
+	modelId?: string,
+): QuotaWindow | undefined {
+	const matched = matchQuotaWindowsForModel(windows, modelId);
+	return matched[0] ?? windows[0];
 }
 
 export class QuotaScheduler {
@@ -96,8 +109,8 @@ export class QuotaScheduler {
 			return cached.report;
 		}
 
-		// 超时控制 (5 秒)
-		const { signal, cleanup } = createTimeoutSignal(5000);
+		// 超时控制 (8 秒)
+		const { signal, cleanup } = createTimeoutSignal(8000);
 		try {
 			const report = await adapter.fetchQuota(ctx, signal);
 			this.cache.set(adapter.id, {
@@ -120,10 +133,9 @@ export class QuotaScheduler {
 		const modelId = ctx?.model?.id;
 
 		if (modelId && report.windows.length > 1) {
-			const matched = matchQuotaWindow(report.windows, modelId);
-			if (matched) {
-				// 精确匹配当前模型专属窗口（如 Argon 匹配 gemini-4-argon，Gemini 匹配 gemini-3.8-flash）
-				targetWindows = [matched];
+			const matched = matchQuotaWindowsForModel(report.windows, modelId);
+			if (matched.length > 0) {
+				targetWindows = matched;
 			}
 		}
 

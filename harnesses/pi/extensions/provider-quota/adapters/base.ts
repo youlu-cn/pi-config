@@ -5,6 +5,7 @@ export function buildQuotaWindow(options: {
 	kind: QuotaWindowKind;
 	label: string;
 	groupId?: string;
+	groupLabel?: string;
 	modelKeys?: string[];
 	remainingPercent: number;
 	usedPercent?: number;
@@ -28,6 +29,7 @@ export function buildQuotaWindow(options: {
 		kind: options.kind,
 		label: options.label,
 		groupId: options.groupId,
+		groupLabel: options.groupLabel,
 		modelKeys: options.modelKeys,
 		remainingPercent,
 		usedPercent,

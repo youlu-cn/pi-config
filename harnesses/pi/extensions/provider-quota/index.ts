@@ -9,6 +9,7 @@
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { formatQuotaReport } from "./format.ts";
 import { AdapterRegistry } from "./registry.ts";
 import { QuotaScheduler } from "./scheduler.ts";
 
@@ -17,10 +18,9 @@ export default function providerQuota(pi: ExtensionAPI): void {
 	const scheduler = new QuotaScheduler(pi, registry);
 
 	// 注册 /quota 查询命令
-	pi.registerCommand({
-		name: "quota",
+	pi.registerCommand("quota", {
 		description: "Display subscription quotas and reset countdowns for configured AI providers",
-		async execute(_args, ctx) {
+		async handler(_args, ctx) {
 			const active = ctx.model?.provider;
 			const report = await scheduler.refreshActiveProvider(ctx);
 
@@ -36,19 +36,8 @@ export default function providerQuota(pi: ExtensionAPI): void {
 				return;
 			}
 
-			const lines: string[] = [
-				`Provider: ${report.displayName} (${report.providerId})`,
-				report.planName ? `Plan: ${report.planName}` : "",
-				report.accountEmail ? `Account: ${report.accountEmail}` : "",
-				"Windows:",
-			].filter(Boolean);
-
-			for (const win of report.windows) {
-				const countdown = win.resetCountdown ? ` [Resets in ${win.resetCountdown}]` : "";
-				lines.push(`  • ${win.label}: ${win.remainingPercent}% remaining${countdown}`);
-			}
-
-			ctx.ui.notify(lines.join("\n"), "info");
+			const formatted = formatQuotaReport(report, ctx.model?.id);
+			ctx.ui.notify(formatted, "info");
 		},
 	});
 
@@ -64,6 +53,10 @@ export default function providerQuota(pi: ExtensionAPI): void {
 	});
 
 	pi.on("agent_settled", (_event, ctx) => {
+		scheduler.refreshActiveProvider(ctx);
+	});
+
+	pi.on("turn_end", (_event, ctx) => {
 		scheduler.refreshActiveProvider(ctx);
 	});
 
