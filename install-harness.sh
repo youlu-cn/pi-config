@@ -207,7 +207,23 @@ if [[ -d "${HARNESS_DIR}/plugin-configs" ]]; then
   done
 fi
 
-# 5. 部署全局规则 (rules/AGENTS.md)
+# 5. 部署主题 (themes)
+echo ""
+echo "Deploying themes..."
+if [[ -d "${HARNESS_DIR}/themes" ]]; then
+  TARGET_THEME_DIR="${TARGET_DIR}/themes"
+  if [[ "${DRY_RUN}" == false ]]; then
+    mkdir -p "${TARGET_THEME_DIR}"
+  fi
+  for theme_file in "${HARNESS_DIR}/themes"/*; do
+    if [[ -f "${theme_file}" ]]; then
+      tname="$(basename "${theme_file}")"
+      deploy_file "${theme_file}" "${TARGET_THEME_DIR}/${tname}"
+    fi
+  done
+fi
+
+# 6. 部署全局规则 (rules/AGENTS.md)
 echo ""
 echo "Deploying rules..."
 RULES_FILE="${SCRIPT_DIR}/rules/AGENTS.md"
@@ -222,7 +238,7 @@ if [[ -f "${RULES_FILE}" ]]; then
   esac
 fi
 
-# 6. 检查 models.json 模板
+# 7. 检查 models.json 模板
 if [[ -f "${HARNESS_DIR}/models.example.json" ]]; then
   if [[ ! -f "${TARGET_DIR}/models.json" ]]; then
     echo ""

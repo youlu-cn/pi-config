@@ -1,6 +1,6 @@
 {
   "$schema": "https://pi.dev/schemas/settings.schema.json",
-  "theme": "system",
+  "theme": "claude-light/claude-dark",
   "defaultProvider": "antigravity",
   "defaultModel": "gemini-3.8-flash",
   "defaultThinkingLevel": "medium",

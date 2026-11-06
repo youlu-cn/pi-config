@@ -21,6 +21,9 @@
 │       │   ├── session-ui/           # 状态栏/回合结算/紧凑粘贴/UI元数据增强插件
 │       │   ├── provider-quota/       # 多 Provider 订阅配额与速率限制监控插件
 │       │   └── .gitkeep
+│       ├── themes/                   # 自定义主题目录
+│       │   ├── claude-dark.json      # Claude Code 风格深色主题（去底色、低噪思考文本）
+│       │   └── claude-light.json     # Claude Code 风格浅色主题
 │       └── models.example.json       # 模型端点与参数覆盖模板
 ├── rules/
 │   └── AGENTS.md                     # 全局通用 Agent 执行规则（提示词/操作边界）
@@ -44,7 +47,7 @@
   - `defaultThinkingLevel: "medium"`：默认思考推理级别。
   - `enabledModels`：快捷轮换与启用的模型列表（包含 gemini-3.8-flash、gemini-4-argon、deepseek 系列及 cursor/default）。
 - **编辑器与界面**：
-  - `theme: "system"`：跟随终端系统主题配色。
+  - `theme: "claude-light/claude-dark"`：Claude Code 风格自适应主题（浅色/深色终端自动切换，去除用户输入沉重色块，微弱弱化思考文本）。
   - `tuiMode: "fullscreen"`：全屏交互界面。
   - `fullscreenScrollbar: "auto"`：自适应显示滚动条。
   - `showHardwareCursor: true`：启用硬件光标，优化终端输入法支持。
