@@ -18,7 +18,8 @@
 │       │   ├── web-search/config.json# 网页检索配置（auto-summary、代理/SSRF网段）
 │       │   └── session-ui/config.json# 状态栏段项定制（模型、耗时、目录、分支、用量等）
 │       ├── extensions/               # 本地自定义扩展存放目录
-│       │   ├── session-ui/           # 状态栏/紧凑粘贴/UI元数据增强插件
+│       │   ├── session-ui/           # 状态栏/回合结算/紧凑粘贴/UI元数据增强插件
+│       │   ├── provider-quota/       # 多 Provider 订阅配额与速率限制监控插件
 │       │   └── .gitkeep
 │       └── models.example.json       # 模型端点与参数覆盖模板
 ├── rules/
@@ -65,6 +66,7 @@
   - `npm:@sentiolabs/pi-frontend-design`：高质感前端设计辅助插件。
 - **自定义插件 (`extensions`)**：
   - `session-ui`：全功能 UI 增强扩展（包含定制状态栏 Statusline、回合结算摘要 Turn-Summary、紧凑粘贴 Compact-Paste、工具执行动效 Work-Animation、会话元数据控制器等）。
+  - `provider-quota`：多 Provider 订阅配额与重置倒计时监控扩展（微内核调度器 + 插件化 Adapters 架构，对接 Antigravity、OpenAI/GPT、Claude、Grok 等）。
 
 ### 2. 键位映射 (`harnesses/pi/config/keybindings.json`)
 
