@@ -1,7 +1,11 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { loadAuthStorage } from "../auth-helper.ts";
-import type { ProviderAdapter, ProviderQuotaReport } from "../types.ts";
+import type { ProviderAdapter, ProviderQuotaReport, QuotaWindow } from "../types.ts";
 import { buildQuotaWindow } from "./base.ts";
+
+export const ANTIGRAVITY_GEMINI_MODELS = "gemini-models";
+export const ANTIGRAVITY_ARGON_MODELS = "gemini-argon";
+export const ANTIGRAVITY_3P_MODELS = "claude-and-gpt-models";
 
 export class AntigravityAdapter implements ProviderAdapter {
 	readonly id = "antigravity";
@@ -22,15 +26,13 @@ export class AntigravityAdapter implements ProviderAdapter {
 		const entry = auth.antigravity || auth["google-antigravity"] || {};
 		const token = entry.access_token || entry.token || process.env.ANTIGRAVITY_TOKEN;
 
-		// 默认构建兜底报告（即使未能连通实际接口，也能安全降级）
 		const now = Date.now();
-		// 计算到下一个 UTC 午夜的重置时间
 		const nextMidnight = new Date();
 		nextMidnight.setUTCHours(24, 0, 0, 0);
+		const defaultResetsAt = nextMidnight.getTime();
 
-		// 如果有实际 token，可请求 Google API 获取实时配额详情
-		// 此处保留接口调用通道，超时或失败均平滑降级
-		let remainingPercent = 100;
+		let windows: QuotaWindow[] = [];
+
 		if (token) {
 			try {
 				const res = await fetch("https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist", {
@@ -45,32 +47,119 @@ export class AntigravityAdapter implements ProviderAdapter {
 					}),
 					signal,
 				});
+
 				if (res.ok) {
-					// 成功解析实际配额响应
 					const data = (await res.json()) as any;
-					if (typeof data?.quotaRemainingPercent === "number") {
-						remainingPercent = data.quotaRemainingPercent;
+					if (Array.isArray(data?.groups) && data.groups.length > 0) {
+						windows = this.parseAntigravityGroups(data.groups, defaultResetsAt);
 					}
 				}
 			} catch {
-				// 网络或鉴权失败时，静默保底
+				// 网络或解析失败时使用默认三组窗口降级
 			}
 		}
 
-		const primaryWindow = buildQuotaWindow({
-			kind: "daily",
-			label: "Gemini 每日",
-			remainingPercent,
-			resetsAt: nextMidnight.getTime(),
-		});
+		// 默认保底三组配额窗口（Gemini、Gemini 4 Argon、Claude & GPT）
+		if (windows.length === 0) {
+			windows = [
+				buildQuotaWindow({
+					kind: "daily",
+					groupId: ANTIGRAVITY_GEMINI_MODELS,
+					label: "Gemini",
+					modelKeys: ["gemini-flash", "gemini-pro", "gemini-3", "gemini-2", "gemini"],
+					remainingPercent: 100,
+					resetsAt: defaultResetsAt,
+				}),
+				buildQuotaWindow({
+					kind: "daily",
+					groupId: ANTIGRAVITY_ARGON_MODELS,
+					label: "Argon",
+					modelKeys: ["argon", "gemini-4-argon", "gemini-4"],
+					remainingPercent: 100,
+					resetsAt: defaultResetsAt,
+				}),
+				buildQuotaWindow({
+					kind: "daily",
+					groupId: ANTIGRAVITY_3P_MODELS,
+					label: "Claude/GPT",
+					modelKeys: ["claude", "gpt"],
+					remainingPercent: 100,
+					resetsAt: defaultResetsAt,
+				}),
+			];
+		}
 
 		return {
 			providerId: "antigravity",
 			displayName: "Google Antigravity",
 			accountEmail: entry.email,
 			capturedAt: now,
-			primaryWindow,
-			windows: [primaryWindow],
+			primaryWindow: windows[0]!,
+			windows,
 		};
+	}
+
+	private parseAntigravityGroups(groups: any[], defaultResetsAt: number): QuotaWindow[] {
+		const windows: QuotaWindow[] = [];
+
+		for (const group of groups) {
+			const displayName = typeof group.displayName === "string" ? group.displayName : "";
+			const buckets = Array.isArray(group.buckets) ? group.buckets : [];
+
+			for (const b of buckets) {
+				const bucketId = String(b.bucketId || "").toLowerCase();
+				const remainingFraction = typeof b.remainingFraction === "number" ? b.remainingFraction : 1.0;
+				const remainingPercent = Math.round(Math.max(0, Math.min(1, remainingFraction)) * 100);
+
+				let resetsAt = defaultResetsAt;
+				if (b.resetTime) {
+					const parsed = Date.parse(b.resetTime);
+					if (!isNaN(parsed) && parsed > 0) resetsAt = parsed;
+				}
+
+				if (bucketId.includes("argon") || displayName.toLowerCase().includes("argon")) {
+					windows.push(
+						buildQuotaWindow({
+							kind: "daily",
+							groupId: ANTIGRAVITY_ARGON_MODELS,
+							label: "Argon",
+							modelKeys: ["argon", "gemini-4-argon", "gemini-4"],
+							remainingPercent,
+							resetsAt,
+						}),
+					);
+				} else if (
+					bucketId.includes("3p") ||
+					bucketId.includes("claude") ||
+					bucketId.includes("gpt") ||
+					displayName.toLowerCase().includes("claude") ||
+					displayName.toLowerCase().includes("gpt")
+				) {
+					windows.push(
+						buildQuotaWindow({
+							kind: "daily",
+							groupId: ANTIGRAVITY_3P_MODELS,
+							label: "Claude/GPT",
+							modelKeys: ["claude", "gpt"],
+							remainingPercent,
+							resetsAt,
+						}),
+					);
+				} else {
+					windows.push(
+						buildQuotaWindow({
+							kind: "daily",
+							groupId: ANTIGRAVITY_GEMINI_MODELS,
+							label: "Gemini",
+							modelKeys: ["gemini-flash", "gemini-pro", "gemini-3", "gemini-2", "gemini"],
+							remainingPercent,
+							resetsAt,
+						}),
+					);
+				}
+			}
+		}
+
+		return windows;
 	}
 }

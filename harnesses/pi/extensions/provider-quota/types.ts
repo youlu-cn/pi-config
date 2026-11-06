@@ -5,6 +5,8 @@ export type QuotaWindowKind = "hourly" | "daily" | "weekly" | "monthly" | "rolli
 export interface QuotaWindow {
 	kind: QuotaWindowKind;
 	label: string;
+	groupId?: string;
+	modelKeys?: string[];
 	remainingPercent: number; // 0..100
 	usedPercent?: number;
 	displayPercent?: number;

@@ -4,6 +4,8 @@ import type { QuotaWindow, QuotaWindowKind } from "../types.ts";
 export function buildQuotaWindow(options: {
 	kind: QuotaWindowKind;
 	label: string;
+	groupId?: string;
+	modelKeys?: string[];
 	remainingPercent: number;
 	usedPercent?: number;
 	windowMinutes?: number;
@@ -25,6 +27,8 @@ export function buildQuotaWindow(options: {
 	return {
 		kind: options.kind,
 		label: options.label,
+		groupId: options.groupId,
+		modelKeys: options.modelKeys,
 		remainingPercent,
 		usedPercent,
 		displayPercent: remainingPercent,

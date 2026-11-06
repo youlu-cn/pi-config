@@ -10,17 +10,48 @@ interface CacheEntry {
 	expiresAt: number;
 }
 
+/** Match best quota window for the given model ID */
+export function matchQuotaWindow(windows: QuotaWindow[], modelId?: string): QuotaWindow | undefined {
+	if (!windows || windows.length === 0) return undefined;
+	if (!modelId || windows.length === 1) return windows[0];
+
+	const normalized = modelId.toLowerCase();
+	const matches: { window: QuotaWindow; matchLength: number }[] = [];
+
+	for (const win of windows) {
+		if (!win.modelKeys || win.modelKeys.length === 0) continue;
+		for (const key of win.modelKeys) {
+			const k = key.toLowerCase();
+			if (normalized.includes(k)) {
+				matches.push({ window: win, matchLength: k.length });
+			}
+		}
+	}
+
+	if (matches.length > 0) {
+		// 最具体（匹配 key 最长）的窗口优先级最高
+		matches.sort((a, b) => b.matchLength - a.matchLength);
+		return matches[0]!.window;
+	}
+
+	return windows[0];
+}
+
 export class QuotaScheduler {
+	private readonly pi: ExtensionAPI;
+	private readonly registry: AdapterRegistry;
 	private readonly cache: Map<string, CacheEntry> = new Map();
 	private readonly cacheTtlMs: number;
 	private pollTimer?: NodeJS.Timeout;
 	private activeAbortController?: AbortController;
 
 	constructor(
-		private readonly pi: ExtensionAPI,
-		private readonly registry: AdapterRegistry,
+		pi: ExtensionAPI,
+		registry: AdapterRegistry,
 		options: { cacheTtlMs?: number } = {},
 	) {
+		this.pi = pi;
+		this.registry = registry;
 		this.cacheTtlMs = options.cacheTtlMs ?? 60_000; // 默认 60 秒缓存
 	}
 
@@ -61,7 +92,7 @@ export class QuotaScheduler {
 		const now = Date.now();
 		const cached = this.cache.get(adapter.id);
 		if (cached && cached.expiresAt > now) {
-			this.broadcast(cached.report);
+			this.broadcast(cached.report, ctx);
 			return cached.report;
 		}
 
@@ -73,7 +104,7 @@ export class QuotaScheduler {
 				report,
 				expiresAt: now + this.cacheTtlMs,
 			});
-			this.broadcast(report);
+			this.broadcast(report, ctx);
 			return report;
 		} catch (error) {
 			// 静默降级，不阻断宿主运行
@@ -84,14 +115,25 @@ export class QuotaScheduler {
 	}
 
 	/** Broadcast standard status event to session-ui statusline */
-	private broadcast(report: ProviderQuotaReport): void {
+	private broadcast(report: ProviderQuotaReport, ctx?: ExtensionContext): void {
+		let targetWindows = report.windows;
+		const modelId = ctx?.model?.id;
+
+		if (modelId && report.windows.length > 1) {
+			const matched = matchQuotaWindow(report.windows, modelId);
+			if (matched) {
+				// 精确匹配当前模型专属窗口（如 Argon 匹配 gemini-4-argon，Gemini 匹配 gemini-3.8-flash）
+				targetWindows = [matched];
+			}
+		}
+
 		this.pi.events.emit(SUBSCRIPTION_USAGE_EVENT, {
 			v: 1,
 			status: "ready",
 			providerId: report.providerId,
 			capturedAt: report.capturedAt,
 			displayMode: "remaining",
-			windows: report.windows,
+			windows: targetWindows,
 		});
 	}
 }
