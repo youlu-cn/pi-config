@@ -27,7 +27,7 @@ export default function cacheAndOrchestratorExtension(pi: ExtensionAPI): void {
 			},
 		} as any,
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-			const res = await runScoutTask(params || {}, ctx);
+			const res = await runScoutTask(params || {}, ctx, orchestrator.config.scoutModel);
 			if (res.success) {
 				return {
 					content: [
@@ -71,7 +71,7 @@ export default function cacheAndOrchestratorExtension(pi: ExtensionAPI): void {
 			required: ["task"],
 		} as any,
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-			const res = await runArchitectTask(params as any, ctx);
+			const res = await runArchitectTask(params as any, ctx, orchestrator.config.architectModel);
 			if (res.success) {
 				return {
 					content: [

@@ -40,6 +40,35 @@
 
 ---
 
+## 自定义配置与按时段排期（基于本机时间）
+
+支持在工作区 `.pi/orchestrator.json` 或全局 `~/.pi/agent/state/cache-and-orchestrator.json` 覆盖所有模型与按时段模型排期：
+
+```json
+{
+  "scoutModel": "google/gemini-3.8-flash",
+  "architectModel": "google/gemini-4-argon",
+  "defaultExecuteModel": "zai/glm-5.3",
+  "defaultRate": "0.5x",
+  "schedules": [
+    {
+      "name": "workday-peak",
+      "days": [1, 2, 3, 4, 5],
+      "start": "14:00",
+      "end": "18:00",
+      "model": "zai/glm-5.3-flash",
+      "rate": "1.0x"
+    }
+  ]
+}
+```
+
+- **`scoutModel` / `architectModel`**：自定义子任务模型。
+- **`schedules`**：按**本机时间 (Local Time)**生效的模型排期列表。命中时自动初选为对应时段模型；未命中走 `defaultExecuteModel`。
+- **跨天支持**：支持跨天时间段（如 `"start": "23:00", "end": "06:00"`）。
+
+---
+
 ## 快捷命令
 
 - `/rescan`：清除 `.pi/scan-cache.json` 并调用 `scout` 强制全量更新项目架构指纹。

@@ -54,9 +54,10 @@ export interface ScoutParams {
 export async function runScoutTask(
 	params: ScoutParams,
 	ctx: ExtensionContext,
+	customModelSpec?: string,
 ): Promise<{ success: boolean; repoSummary: string; gitHead: string; error?: string }> {
 	const gitHead = runGitCmd(ctx.cwd, "rev-parse HEAD") || "unknown";
-	const scoutModel = findScoutModel(ctx);
+	const scoutModel = findScoutModel(ctx, customModelSpec);
 
 	// 1. 尝试使用 subagent CLI 启动只读独立子会话进行深探
 	try {

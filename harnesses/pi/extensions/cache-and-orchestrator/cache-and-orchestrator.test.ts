@@ -1,13 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
 	DEFAULT_CONFIG,
-	isPeakHoursBeijing,
-	getZaiPricingRate,
+	parseTimeToMinutes,
+	matchScheduleRule,
+	getScheduledModelSelection,
+	loadOrchestratorConfig,
+	saveOrchestratorConfig,
 	isHighCostModel,
+	type OrchestratorConfig,
 } from "./config.ts";
 import {
 	checkScanState,
@@ -19,33 +23,93 @@ import { extractTaskSpec } from "./tools/architect.ts";
 import { extractRepoSummary } from "./tools/scout.ts";
 import { CacheAndOrchestrator } from "./orchestrator.ts";
 
-test("config: model definitions and high-cost detection", () => {
-	assert.equal(DEFAULT_CONFIG.scoutModel, "google/gemini-3.8-flash");
-	assert.equal(DEFAULT_CONFIG.architectModel, "google/gemini-4-argon");
-	assert.equal(DEFAULT_CONFIG.executeFullModel, "zai/glm-5.3");
-	assert.equal(DEFAULT_CONFIG.executeFlashModel, "zai/glm-5.3-flash");
+test("config: time parsing to minutes", () => {
+	assert.equal(parseTimeToMinutes("00:00"), 0);
+	assert.equal(parseTimeToMinutes("14:30"), 870);
+	assert.equal(parseTimeToMinutes("18:00"), 1080);
+	assert.equal(parseTimeToMinutes("23:59"), 1439);
+	assert.equal(parseTimeToMinutes("invalid"), undefined);
+});
 
+test("config: local time schedule matching (weekdays & time slots)", () => {
+	const rules = [
+		{
+			name: "peak-hours",
+			days: [1, 2, 3, 4, 5],
+			start: "14:00",
+			end: "18:00",
+			model: "zai/glm-5.3-flash",
+			rate: "1.0x",
+		},
+		{
+			name: "night-owl",
+			days: [0, 1, 2, 3, 4, 5, 6],
+			start: "23:00",
+			end: "06:00",
+			model: "deepseek/deepseek-flash",
+			rate: "Night",
+		},
+	];
+
+	// 1. 周一 15:30 (命中工作日高峰期)
+	const mondayPeak = new Date(2026, 10, 9, 15, 30); // 2026-11-09 is Monday
+	const match1 = matchScheduleRule(rules, mondayPeak);
+	assert.ok(match1);
+	assert.equal(match1?.name, "peak-hours");
+	assert.equal(match1?.model, "zai/glm-5.3-flash");
+
+	// 2. 周一 18:30 (未命中高峰期，走默认模型)
+	const mondayEvening = new Date(2026, 10, 9, 18, 30);
+	assert.equal(matchScheduleRule(rules, mondayEvening), undefined);
+
+	// 3. 周日 15:30 (周末不属于工作日，不命中高峰期)
+	const sundayAfternoon = new Date(2026, 10, 8, 15, 30); // 2026-11-08 is Sunday
+	assert.equal(matchScheduleRule(rules, sundayAfternoon), undefined);
+
+	// 4. 任意一天 23:30 (命中跨天 night-owl 规则)
+	const nightTime = new Date(2026, 10, 9, 23, 30);
+	const matchNight = matchScheduleRule(rules, nightTime);
+	assert.ok(matchNight);
+	assert.equal(matchNight?.name, "night-owl");
+});
+
+test("config: model override and persistence from local/global files", () => {
+	const tempDir = mkdtempSync(join(tmpdir(), "orchestrator-cfg-"));
+	try {
+		const customConfig: OrchestratorConfig = {
+			scoutModel: "custom/flash-scout",
+			architectModel: "custom/argon-architect",
+			defaultExecuteModel: "custom/glm-default",
+			defaultRate: "Free",
+			schedules: [
+				{
+					name: "custom-slot",
+					start: "10:00",
+					end: "12:00",
+					model: "custom/slot-model",
+					rate: "Slot",
+				},
+			],
+		};
+
+		saveOrchestratorConfig(customConfig, tempDir);
+		const loaded = loadOrchestratorConfig(tempDir, tempDir);
+
+		assert.equal(loaded.scoutModel, "custom/flash-scout");
+		assert.equal(loaded.architectModel, "custom/argon-architect");
+		assert.equal(loaded.defaultExecuteModel, "custom/glm-default");
+		assert.equal(loaded.schedules.length, 1);
+		assert.equal(loaded.schedules[0]?.model, "custom/slot-model");
+	} finally {
+		rmSync(tempDir, { recursive: true, force: true });
+	}
+});
+
+test("config: high cost model detection", () => {
 	assert.equal(isHighCostModel("gemini-4-argon"), true);
 	assert.equal(isHighCostModel("claude-3-opus"), true);
 	assert.equal(isHighCostModel("glm-5.3"), false);
 	assert.equal(isHighCostModel("gemini-3.8-flash"), false);
-});
-
-test("config: peak hours (UTC+8 Mon-Fri 14:00-18:00) vs off-peak rates", () => {
-	// 周一北京时间 15:00 (高峰)
-	const mondayPeak = new Date("2026-11-09T07:00:00Z");
-	assert.equal(isPeakHoursBeijing(mondayPeak), true);
-	assert.equal(getZaiPricingRate(mondayPeak), "1.0x");
-
-	// 周一北京时间 19:00 (非高峰 0.5x)
-	const mondayNight = new Date("2026-11-09T11:00:00Z");
-	assert.equal(isPeakHoursBeijing(mondayNight), false);
-	assert.equal(getZaiPricingRate(mondayNight), "0.5x");
-
-	// 周末全天 0.5x
-	const sunday = new Date("2026-11-08T07:00:00Z");
-	assert.equal(isPeakHoursBeijing(sunday), false);
-	assert.equal(getZaiPricingRate(sunday), "0.5x");
 });
 
 test("scan-cache: lifecycle and file tracking", () => {
@@ -80,7 +144,7 @@ test("tools extractors: task_spec and repo_summary tags", () => {
 	assert.equal(extractRepoSummary(summaryText), "技术栈：Node.js\n架构：分层设计");
 });
 
-test("orchestrator: status bar formatting", () => {
+test("orchestrator: status bar formatting with dynamic rates", () => {
 	let statusKey = "";
 	let statusText = "";
 
@@ -104,7 +168,7 @@ test("orchestrator: status bar formatting", () => {
 	assert.equal(statusKey, "cache-and-orchestrator");
 	assert.ok(statusText.includes("📦 Scan:"));
 	assert.ok(statusText.includes("Cache Lock:"));
-	assert.ok(statusText.includes("⏱️ Z.ai:"));
+	assert.ok(statusText.includes("⏱️ Rate:"));
 });
 
 test("orchestrator: sticky KV cache lock preserves session model once history accumulates", async () => {

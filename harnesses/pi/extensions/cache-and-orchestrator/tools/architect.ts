@@ -36,8 +36,9 @@ export interface ArchitectParams {
 export async function runArchitectTask(
 	params: ArchitectParams,
 	ctx: ExtensionContext,
+	customModelSpec?: string,
 ): Promise<{ success: boolean; taskSpec: string; modelUsed: string; error?: string }> {
-	const argonModel = findArgonModel(ctx);
+	const argonModel = findArgonModel(ctx, customModelSpec);
 	const targetModel = argonModel || ctx.model;
 
 	if (!targetModel) {

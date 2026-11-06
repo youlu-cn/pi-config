@@ -2,9 +2,10 @@ import type { ExtensionAPI, ExtensionContext, Model } from "@earendil-works/pi-c
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import {
 	DEFAULT_CONFIG,
-	getZaiPricingRate,
+	getScheduledModelSelection,
 	isHighCostModel,
-	isPeakHoursBeijing,
+	loadOrchestratorConfig,
+	type OrchestratorConfig,
 } from "./config.ts";
 import {
 	checkScanState,
@@ -16,15 +17,30 @@ import { runScoutTask } from "./tools/scout.ts";
 
 export class CacheAndOrchestrator {
 	private readonly pi: ExtensionAPI;
+	private currentConfig: OrchestratorConfig;
 	private cacheLockActive = false;
 	private lastInitialModelAssigned?: string;
+	private readonly overrideStateDir?: string;
 
-	constructor(pi: ExtensionAPI) {
+	constructor(pi: ExtensionAPI, initialCwd: string = process.cwd(), overrideStateDir?: string) {
 		this.pi = pi;
+		this.overrideStateDir = overrideStateDir;
+		this.currentConfig = loadOrchestratorConfig(initialCwd, overrideStateDir);
+	}
+
+	get config(): OrchestratorConfig {
+		return this.currentConfig;
 	}
 
 	get isCacheLocked(): boolean {
 		return this.cacheLockActive;
+	}
+
+	/**
+	 * 重新从磁盘加载配置（支持工作区及全局热更新）
+	 */
+	reloadConfig(cwd: string): void {
+		this.currentConfig = loadOrchestratorConfig(cwd, this.overrideStateDir);
 	}
 
 	/**
@@ -35,7 +51,8 @@ export class CacheAndOrchestrator {
 		if (!ctx.hasUI) return;
 
 		const scan = scanInfo || checkScanState(ctx.cwd);
-		const rate = getZaiPricingRate();
+		const scheduled = getScheduledModelSelection(this.currentConfig, new Date());
+		const rate = scheduled.rate;
 
 		let scanBadge = "📦 Scan: Unscanned";
 		if (scan.status === "CACHED") {
@@ -46,15 +63,17 @@ export class CacheAndOrchestrator {
 		}
 
 		const lockBadge = this.cacheLockActive ? "🔥 Cache Lock: Active" : "🔓 Cache Lock: Unlocked";
-		const zaiBadge = `⏱️ Z.ai: ${rate}`;
+		const zaiBadge = `⏱️ Rate: ${rate}`;
 
 		ctx.ui.setStatus("cache-and-orchestrator", `${scanBadge} | ${lockBadge} | ${zaiBadge}`);
 	}
 
 	/**
-	 * 黏性 KV Cache 闲忙时初选：仅在会话初始阶段自动选择主模型
+	 * 黏性 KV Cache 闲忙时初选：仅在会话初始阶段自动选择主模型（基于本机时间与配置规则）
 	 */
 	async checkInitialModelSelection(ctx: ExtensionContext): Promise<void> {
+		this.reloadConfig(ctx.cwd);
+
 		const entries = ctx.sessionManager.getEntries();
 		const messageCount = entries.filter((e: any) => e.type === "message").length;
 
@@ -67,11 +86,9 @@ export class CacheAndOrchestrator {
 
 		this.cacheLockActive = false;
 
-		// 初始空会话时：根据当前时间判断闲忙时
-		const isPeak = isPeakHoursBeijing();
-		const targetModelSpec = isPeak
-			? DEFAULT_CONFIG.executeFlashModel
-			: DEFAULT_CONFIG.executeFullModel;
+		// 依据本机时间和配置规则评估初选模型
+		const scheduled = getScheduledModelSelection(this.currentConfig, new Date());
+		const targetModelSpec = scheduled.model;
 
 		if (this.lastInitialModelAssigned === targetModelSpec) {
 			this.updateStatusBar(ctx);
@@ -83,9 +100,9 @@ export class CacheAndOrchestrator {
 			try {
 				await this.pi.setModel(targetModel);
 				this.lastInitialModelAssigned = targetModelSpec;
-				const timingNotice = isPeak
-					? "⚡ 工作日高峰期 (14:00-18:00)，主模型初选为 GLM-5.3-Flash (3倍配额)"
-					: "💰 非高峰期 (0.5x 半价时段)，主模型初选为主力满血版 GLM-5.3";
+				const timingNotice = scheduled.ruleName
+					? `⚡ 命中时段配置 [${scheduled.ruleName}]，主模型初选为 ${targetModel.name || targetModel.id} (${scheduled.rate})`
+					: `💰 处于常规时段 (${scheduled.rate})，主模型初选为 ${targetModel.name || targetModel.id}`;
 				ctx.ui.notify(timingNotice, "info");
 			} catch {}
 		}
@@ -197,7 +214,7 @@ ${summary}${dirtySection}
 	async rescan(ctx: ExtensionContext): Promise<void> {
 		clearScanCache(ctx.cwd);
 		ctx.ui.notify("🔄 正在调用 scout 启动项目架构扫描...", "info");
-		const res = await runScoutTask({ forceRefresh: true }, ctx);
+		const res = await runScoutTask({ forceRefresh: true }, ctx, this.currentConfig.scoutModel);
 		if (res.success) {
 			ctx.ui.notify(`✅ 项目架构侦察完成并已写入 .pi/scan-cache.json (HEAD: ${res.gitHead.slice(0, 7)})`, "info");
 		} else {
@@ -212,6 +229,15 @@ ${summary}${dirtySection}
 			const [p, id] = parts;
 			const m = ctx.modelRegistry.find(p!, id!);
 			if (m) return m;
+
+			if (p === "google") {
+				const ag = ctx.modelRegistry.find("antigravity", id!);
+				if (ag) return ag;
+			}
+			if (p === "antigravity") {
+				const g = ctx.modelRegistry.find("google", id!);
+				if (g) return g;
+			}
 		}
 		const all = ctx.modelRegistry.getAll();
 		return all.find((m) => spec.includes(m.id) || m.id === spec);
