@@ -1,5 +1,5 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { resolveAntigravityToken } from "../auth-helper.ts";
+import { loadAuthStorage, resolveAntigravityToken } from "../auth-helper.ts";
 import type { ProviderAdapter, ProviderQuotaReport, QuotaWindow, QuotaWindowKind } from "../types.ts";
 import { buildQuotaWindow } from "./base.ts";
 
@@ -66,15 +66,20 @@ export class AntigravityAdapter implements ProviderAdapter {
 	readonly supportedProviders = ["antigravity"];
 
 	isConfigured(ctx: ExtensionContext): boolean {
+		const auth = loadAuthStorage();
+		if (auth.antigravity || auth["google-antigravity"]) return true;
 		if (ctx.model?.provider === "antigravity") return true;
-		return true;
+		return false;
 	}
 
 	async fetchQuota(
 		ctx: ExtensionContext,
 		signal: AbortSignal,
 	): Promise<ProviderQuotaReport> {
-		const cred = await resolveAntigravityToken();
+		const cred = await resolveAntigravityToken(ctx);
+		if (!cred?.token) {
+			throw new Error("Antigravity is not logged in. Please run /login antigravity.");
+		}
 		const now = Date.now();
 
 		const nextMidnight = new Date();

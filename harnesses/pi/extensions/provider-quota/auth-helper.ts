@@ -1,6 +1,7 @@
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 function resolveAgentDir(): string {
 	return process.env.PI_CODING_AGENT_DIR || join(homedir(), ".pi/agent");
@@ -24,34 +25,6 @@ export function loadAuthStorage(): Record<string, any> {
 	}
 }
 
-/**
- * Safely writes auth.json back to the active agent directory
- */
-export function saveAuthStorage(data: Record<string, any>): void {
-	try {
-		const authPath = resolveAuthPath();
-		writeFileSync(authPath, JSON.stringify(data, null, 2), "utf8");
-	} catch {
-		// Ignore write errors in restricted environments
-	}
-}
-
-async function resolveOAuthClientCredentials(): Promise<{ clientId?: string; clientSecret?: string }> {
-	if (process.env.ANTIGRAVITY_CLIENT_ID && process.env.ANTIGRAVITY_CLIENT_SECRET) {
-		return {
-			clientId: process.env.ANTIGRAVITY_CLIENT_ID,
-			clientSecret: process.env.ANTIGRAVITY_CLIENT_SECRET,
-		};
-	}
-	try {
-		const mod: any = await import("pi-antigravity/auth");
-		if (mod?.CLIENT_ID && mod?.CLIENT_SECRET) {
-			return { clientId: mod.CLIENT_ID, clientSecret: mod.CLIENT_SECRET };
-		}
-	} catch {}
-	return {};
-}
-
 export interface AntigravityCredential {
 	token: string;
 	projectId?: string;
@@ -59,66 +32,78 @@ export interface AntigravityCredential {
 }
 
 /**
- * Resolves Antigravity access token, auto-refreshing if expired
+ * Resolves login credential from Pi runtime or auth.json.
+ * Returns undefined if the user has not logged in via Pi.
  */
-export async function resolveAntigravityToken(): Promise<AntigravityCredential | undefined> {
-	const auth = loadAuthStorage();
-	const key = auth.antigravity ? "antigravity" : auth["google-antigravity"] ? "google-antigravity" : undefined;
-	const entry = key ? auth[key] : undefined;
-
-	if (!entry) {
-		const envToken = process.env.ANTIGRAVITY_TOKEN;
-		if (envToken) return { token: envToken };
-		return undefined;
-	}
-
-	let token = entry.access || entry.access_token || entry.token;
-	const email = entry.email;
-	let projectId = entry.projectId;
-
-	if (entry.apiKey && typeof entry.apiKey === "string") {
+export async function resolveAntigravityToken(
+	ctx?: ExtensionContext,
+): Promise<AntigravityCredential | undefined> {
+	// 1. 优先尝试从 Pi 运行时 ModelRegistry 获取已登录凭据（Pi 自动管理 token 有效期）
+	if (ctx?.modelRegistry?.getProviderAuth) {
 		try {
-			const parsed = JSON.parse(entry.apiKey);
-			if (parsed.token) token = parsed.token;
-			if (parsed.projectId) projectId = parsed.projectId;
-		} catch {}
-	}
+			const res = await ctx.modelRegistry.getProviderAuth("antigravity");
+			if (res?.auth) {
+				let token: string | undefined;
+				let projectId: string | undefined;
 
-	const now = Date.now();
-	const expires = typeof entry.expires === "number" ? entry.expires : 0;
-	const refresh = entry.refresh || entry.refresh_token;
-
-	// Token expired or about to expire in 1 minute -> refresh using refresh_token
-	if (refresh && (!token || (expires > 0 && now > expires - 60_000))) {
-		try {
-			const oauthCreds = await resolveOAuthClientCredentials();
-			if (oauthCreds.clientId && oauthCreds.clientSecret) {
-				const res = await fetch("https://oauth2.googleapis.com/token", {
-					method: "POST",
-					headers: { "Content-Type": "application/x-www-form-urlencoded" },
-					body: new URLSearchParams({
-						client_id: oauthCreds.clientId,
-						client_secret: oauthCreds.clientSecret,
-						refresh_token: refresh,
-						grant_type: "refresh_token",
-					}).toString(),
-				});
-				if (res.ok) {
-					const data = (await res.json()) as { access_token?: string; expires_in?: number };
-					if (data.access_token) {
-						token = data.access_token;
-						entry.access = token;
-						if (typeof data.expires_in === "number") {
-							entry.expires = now + data.expires_in * 1000 - 5 * 60 * 1000;
-						}
-						saveAuthStorage(auth);
+				// 检查 apiKey JSON
+				if (typeof res.auth.apiKey === "string") {
+					try {
+						const parsed = JSON.parse(res.auth.apiKey);
+						if (parsed.token) token = parsed.token;
+						if (parsed.projectId) projectId = parsed.projectId;
+					} catch {
+						token = res.auth.apiKey;
 					}
+				}
+
+				// 检查 headers Authorization
+				if (!token && res.auth.headers) {
+					const authHeader =
+						res.auth.headers.Authorization || res.auth.headers.authorization;
+					if (authHeader && authHeader.startsWith("Bearer ")) {
+						token = authHeader.slice(7).trim();
+					}
+				}
+
+				if (token) {
+					const auth = loadAuthStorage();
+					const entry = auth.antigravity || auth["google-antigravity"];
+					return {
+						token,
+						projectId: projectId || entry?.projectId,
+						email: entry?.email,
+					};
 				}
 			}
 		} catch {}
 	}
 
-	if (!token) return undefined;
+	// 2. 从 Pi 登录成功后持久化的 auth.json 读取
+	const auth = loadAuthStorage();
+	const entry = auth.antigravity || auth["google-antigravity"];
+	if (!entry) {
+		return undefined;
+	}
+
+	let token = entry.access || entry.token;
+	let projectId = entry.projectId;
+	const email = entry.email;
+
+	if (!token && entry.apiKey && typeof entry.apiKey === "string") {
+		try {
+			const parsed = JSON.parse(entry.apiKey);
+			if (parsed.token) token = parsed.token;
+			if (parsed.projectId) projectId = parsed.projectId;
+		} catch {
+			token = entry.apiKey;
+		}
+	}
+
+	if (!token) {
+		return undefined;
+	}
+
 	return { token, projectId, email };
 }
 
