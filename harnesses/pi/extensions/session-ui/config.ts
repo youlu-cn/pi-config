@@ -18,6 +18,9 @@ export interface SessionUiConfig {
 	compactPaste: {
 		enabled: boolean;
 	};
+	claudeToolStyle: {
+		enabled: boolean;
+	};
 	statusline: {
 		enabled: boolean;
 		overflow: StatuslineOverflow;
@@ -67,6 +70,9 @@ export const DEFAULT_SESSION_UI_CONFIG: SessionUiConfig = {
 		placement: "aboveEditor",
 	},
 	compactPaste: {
+		enabled: true,
+	},
+	claudeToolStyle: {
 		enabled: true,
 	},
 	statusline: {
@@ -195,6 +201,7 @@ function parseConfig(raw: unknown, warnings: string[]): SessionUiConfig {
 	const toolActivity = objectValue(raw.toolActivity, "toolActivity", warnings);
 	const workAnimation = objectValue(raw.workAnimation, "workAnimation", warnings);
 	const compactPaste = objectValue(raw.compactPaste, "compactPaste", warnings);
+	const claudeToolStyle = objectValue(raw.claudeToolStyle, "claudeToolStyle", warnings);
 	const statusline = objectValue(raw.statusline, "statusline", warnings);
 	const extensionStatuses = objectValue(
 		statusline.extensionStatuses, "statusline.extensionStatuses", warnings,
@@ -297,6 +304,14 @@ function parseConfig(raw: unknown, warnings: string[]): SessionUiConfig {
 				compactPaste.enabled,
 				DEFAULT_SESSION_UI_CONFIG.compactPaste.enabled,
 				"compactPaste.enabled",
+				warnings,
+			),
+		},
+		claudeToolStyle: {
+			enabled: booleanValue(
+				claudeToolStyle.enabled,
+				DEFAULT_SESSION_UI_CONFIG.claudeToolStyle.enabled,
+				"claudeToolStyle.enabled",
 				warnings,
 			),
 		},

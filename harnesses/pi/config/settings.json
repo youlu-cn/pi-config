@@ -4,6 +4,7 @@
   "defaultProvider": "antigravity",
   "defaultModel": "gemini-3.8-flash",
   "defaultThinkingLevel": "medium",
+  "hideThinkingBlock": true,
   "enabledModels": [
     "antigravity/gemini-3.8-flash",
     "antigravity/gemini-4-argon",
@@ -35,5 +36,10 @@
     "npm:pi-antigravity",
     "npm:@sentiolabs/pi-frontend-design"
   ],
-  "extensions": []
+  "extensions": [],
+  "lastChangelogVersion": "1.5.0",
+  "extensionChangelogVersions": {
+    "{\"source\":\"npm:pi-web-access\",\"scope\":\"user\"}": "0.47.0",
+    "{\"source\":\"npm:pi-cursor-sdk\",\"scope\":\"user\"}": "0.5.11"
+  }
 }

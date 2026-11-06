@@ -5,8 +5,9 @@ import type {
 	Theme,
 	ThemeColor,
 } from "@earendil-works/pi-coding-agent";
-import { basename } from "node:path";
+import { basename, join } from "node:path";
 import { homedir } from "node:os";
+import { existsSync, readFileSync } from "node:fs";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { SessionUiConfig } from "./config.ts";
 import {
@@ -42,7 +43,35 @@ const I_USAGE_ROLLING = "\uF01E";
 const I_USAGE_QUOTA = "\uF0E4";
 const I_SEP = "\uE0B1";
 const SUBSCRIPTION_USAGE_EVENT = "subscription-usage/status/v1";
+const AUTO_MODEL_STATUS_EVENT = "auto-model/status/v1";
 const REGISTER_SEGMENT_EVENT = "session-ui/statusline/register/v1";
+
+export interface AutoModelStatusView {
+	enabled: boolean;
+	phase?: "SCOUT" | "PLAN" | "EXECUTE";
+}
+
+function loadInitialAutoModelStatus(cwd: string): AutoModelStatusView | undefined {
+	try {
+		const stateDir = process.env.PI_CODING_AGENT_DIR || join(homedir(), ".pi/agent");
+		const globalPath = join(stateDir, "state", "auto-model-router.json");
+		const localPath = join(cwd, ".pi", "model-router.json");
+
+		let autoEnabled = true;
+		if (existsSync(localPath)) {
+			const parsed = JSON.parse(readFileSync(localPath, "utf8"));
+			if (typeof parsed.autoEnabled === "boolean") autoEnabled = parsed.autoEnabled;
+		} else if (existsSync(globalPath)) {
+			const parsed = JSON.parse(readFileSync(globalPath, "utf8"));
+			if (typeof parsed.autoEnabled === "boolean") autoEnabled = parsed.autoEnabled;
+		}
+
+		if (autoEnabled) {
+			return { enabled: true, phase: "EXECUTE" };
+		}
+	} catch {}
+	return undefined;
+}
 
 interface FooterData {
 	getGitBranch(): string | null;
@@ -57,7 +86,7 @@ function remainingUsageColor(percent: number): ThemeColor {
 }
 
 function usageWindowIcon(kind: SubscriptionUsageWindowKind): string {
-	if (kind === "hourly") return I_USAGE_HOURLY;
+	if (kind === "hourly" || kind === "daily") return I_USAGE_HOURLY;
 	if (kind === "weekly") return I_USAGE_WEEKLY;
 	if (kind === "monthly") return I_USAGE_MONTHLY;
 	if (kind === "rolling") return I_USAGE_ROLLING;
@@ -162,6 +191,7 @@ export function layoutStatusSegments(
 function registerBuiltInSegments(
 	registry: StatusSegmentRegistry,
 	getUsageFromEvent: () => SubscriptionUsageView | undefined,
+	getAutoModelStatus: () => AutoModelStatusView | undefined,
 	excludedExtensionStatuses: readonly string[],
 ): void {
 	registry.register({
@@ -171,6 +201,18 @@ function registerBuiltInSegments(
 		render: ({ ctx, theme }) => {
 			const fullName = ctx.model?.name || ctx.model?.id || "no-model";
 			const compactName = ctx.model?.id || fullName;
+			const autoStatus = getAutoModelStatus();
+
+			if (autoStatus?.enabled && autoStatus.phase) {
+				const phaseShort = autoStatus.phase === "EXECUTE" ? "EXEC" : autoStatus.phase;
+				const fullTag = `Auto[${phaseShort}] · ${fullName}`;
+				const compactTag = `[${phaseShort}] ${ellipsize(compactName, 14)}`;
+				return {
+					full: segment(theme, "accent", I_MODEL, theme.bold(fullTag)),
+					compact: segment(theme, "accent", I_MODEL, theme.bold(compactTag)),
+				};
+			}
+
 			return {
 				full: segment(theme, "accent", I_MODEL, theme.bold(fullName)),
 				compact: segment(
@@ -279,7 +321,17 @@ function registerBuiltInSegments(
 					return `${icon} ${window.label} ${percent}${reset}`;
 				})
 				.join("  ");
-			return value ? { full: value } : undefined;
+			const compact = usage.windows
+				.map((window) => {
+					const icon = theme.fg("accent", usageWindowIcon(window.kind));
+					const percent = theme.fg(
+						remainingUsageColor(window.remainingPercent),
+						theme.bold(`${Math.round(window.displayPercent)}%`),
+					);
+					return `${icon} ${window.label} ${percent}`;
+				})
+				.join(" ");
+			return value ? { full: value, compact } : undefined;
 		},
 	});
 
@@ -353,15 +405,27 @@ export function registerStatusline(
 	let requestRender: (() => void) | undefined;
 	let statsCache: { length: number; stats: Stats } | undefined;
 	let usageFromEvent: SubscriptionUsageView | undefined;
+	let autoModelFromEvent: AutoModelStatusView | undefined;
 	registerBuiltInSegments(
 		registry,
 		() => usageFromEvent,
+		() => autoModelFromEvent,
 		config.extensionStatuses.exclude,
 	);
 
 	pi.events.on(SUBSCRIPTION_USAGE_EVENT, (data) => {
 		usageFromEvent = parseSubscriptionUsageEvent(data);
 		requestRender?.();
+	});
+
+	pi.events.on(AUTO_MODEL_STATUS_EVENT, (data) => {
+		if (data && typeof data === "object" && (data as any).v === 1) {
+			autoModelFromEvent = {
+				enabled: (data as any).enabled === true,
+				phase: (data as any).phase,
+			};
+			requestRender?.();
+		}
 	});
 
 	pi.events.on(REGISTER_SEGMENT_EVENT, (value) => {
@@ -428,6 +492,7 @@ export function registerStatusline(
 	pi.on("session_start", (_event, ctx) => {
 		statsCache = undefined;
 		usageFromEvent = undefined;
+		autoModelFromEvent = autoModelFromEvent ?? loadInitialAutoModelStatus(ctx.cwd);
 		const unknownSegments = findUnknownStatusSegments(
 			config.segments,
 			registry.ids(),
@@ -439,6 +504,7 @@ export function registerStatusline(
 			);
 		}
 		apply(ctx);
+		pi.events.emit("session-ui/statusline/ready/v1");
 	});
 
 	const refresh = () => requestRender?.();
