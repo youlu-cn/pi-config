@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test, { type TestContext } from "node:test";
-import { phaseForTool } from "./work-animation-core.ts";
+import { phaseForTool, renderGeminiDots } from "./work-animation-core.ts";
 import { loadWorkAnimationState, saveWorkAnimationState } from "./work-animation-state.ts";
 
 function fixture(t: TestContext) {
@@ -11,6 +11,23 @@ function fixture(t: TestContext) {
 	t.after(() => rmSync(root, { recursive: true, force: true }));
 	return { root, path: join(root, "state", "session-ui.json") };
 }
+
+test("renderGeminiDots animates dots bouncing back and forth", () => {
+	const theme = { fg: (color: string, text: string) => `[${color}]${text}[/${color}]` };
+	const f0 = renderGeminiDots(0, theme, 4);
+	const f1 = renderGeminiDots(1, theme, 4);
+	const f2 = renderGeminiDots(2, theme, 4);
+	const f3 = renderGeminiDots(3, theme, 4);
+	const f4 = renderGeminiDots(4, theme, 4);
+	const f5 = renderGeminiDots(5, theme, 4);
+
+	assert.equal(f0, "[accent]●[/accent] [dim]·[/dim] [dim]·[/dim] [dim]·[/dim]");
+	assert.equal(f1, "[dim]·[/dim] [accent]●[/accent] [dim]·[/dim] [dim]·[/dim]");
+	assert.equal(f2, "[dim]·[/dim] [dim]·[/dim] [accent]●[/accent] [dim]·[/dim]");
+	assert.equal(f3, "[dim]·[/dim] [dim]·[/dim] [dim]·[/dim] [accent]●[/accent]");
+	assert.equal(f4, "[dim]·[/dim] [dim]·[/dim] [accent]●[/accent] [dim]·[/dim]");
+	assert.equal(f5, "[dim]·[/dim] [accent]●[/accent] [dim]·[/dim] [dim]·[/dim]");
+});
 
 test("phaseForTool maps common tool families", () => {
 	assert.equal(phaseForTool("read"), "Reading...");

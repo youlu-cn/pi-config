@@ -5,7 +5,7 @@ import type {
 import { truncateToWidth } from "@earendil-works/pi-tui";
 import type { SessionUiConfig } from "./config.ts";
 import type { SessionTitleController } from "./title-controller.ts";
-import { phaseForTool } from "./work-animation-core.ts";
+import { phaseForTool, renderGeminiDots } from "./work-animation-core.ts";
 import {
 	loadWorkAnimationState,
 	saveWorkAnimationState,
@@ -19,7 +19,6 @@ type ActiveTool = {
 
 const WIDGET_ID = "session-ui:work-animation";
 const TITLE_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-const MASCOT_FRAMES = ["ᕕ( ᐛ )ᕗ", "ᕗ( ᐛ )ᕕ"];
 
 export function registerWorkAnimation(
 	pi: ExtensionAPI,
@@ -113,8 +112,8 @@ export function registerWorkAnimation(
 				return {
 					render(width: number): string[] {
 						if (!running || !config.enabled) return [];
-						const mascot = MASCOT_FRAMES[frameIndex % MASCOT_FRAMES.length]!;
-						const line = `${theme.fg("accent", mascot)} ${theme.fg("muted", phase)}`;
+						const dots = renderGeminiDots(frameIndex, theme, 4);
+						const line = `${dots}  ${theme.fg("muted", phase)}`;
 						return [truncateToWidth(line, Math.max(1, width), "")];
 					},
 					invalidate() {},
