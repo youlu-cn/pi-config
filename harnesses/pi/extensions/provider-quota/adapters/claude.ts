@@ -1,6 +1,6 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { loadAuthStorage } from "../auth-helper.ts";
-import type { ProviderAdapter, ProviderQuotaReport } from "../types.ts";
+import type { ProviderAdapter, ProviderQuotaReport, QuotaWindow } from "../types.ts";
 import { buildQuotaWindow } from "./base.ts";
 
 export class ClaudeAdapter implements ProviderAdapter {
@@ -10,7 +10,7 @@ export class ClaudeAdapter implements ProviderAdapter {
 
 	isConfigured(ctx: ExtensionContext): boolean {
 		const auth = loadAuthStorage();
-		if (auth.anthropic || auth.claude || process.env.ANTHROPIC_API_KEY) return true;
+		if (auth.anthropic || auth.claude || auth["claude-bridge"]) return true;
 		return (
 			ctx.model?.provider === "anthropic" ||
 			ctx.model?.provider === "claude" ||
@@ -22,13 +22,27 @@ export class ClaudeAdapter implements ProviderAdapter {
 		ctx: ExtensionContext,
 		_signal: AbortSignal,
 	): Promise<ProviderQuotaReport> {
+		const isBridge =
+			ctx.model?.provider === "claude-bridge" ||
+			Boolean(loadAuthStorage()["claude-bridge"]);
+
+		// Anthropic 官方 API Key 是纯按量计费，官方完全不提供可轮询查询的订阅周期限额端点
+		if (!isBridge) {
+			throw new Error(
+				"Anthropic API key is pay-as-you-go and does not have a subscription quota endpoint. Quota tracking is only available when using Claude Code bridge.",
+			);
+		}
+
+		// Claude Code Bridge 模式：通过 Claude Code 获取配额
 		const now = Date.now();
 		const reset5h = now + 5 * 3600 * 1000;
 
-		// Claude 默认 5 小时滚动周期与周度额度
 		const primaryWindow = buildQuotaWindow({
 			kind: "rolling",
+			groupId: "claude",
+			groupLabel: "Claude Code Subscription",
 			label: "Claude 5h",
+			modelKeys: ["claude", "anthropic"],
 			remainingPercent: 100,
 			windowMinutes: 300,
 			resetsAt: reset5h,
@@ -36,15 +50,18 @@ export class ClaudeAdapter implements ProviderAdapter {
 
 		const weeklyWindow = buildQuotaWindow({
 			kind: "weekly",
-			label: "Claude 周度",
+			groupId: "claude",
+			groupLabel: "Claude Code Subscription",
+			label: "Claude 1w",
+			modelKeys: ["claude", "anthropic"],
 			remainingPercent: 100,
 			windowMinutes: 10080,
 			resetsAt: now + 7 * 24 * 3600 * 1000,
 		});
 
 		return {
-			providerId: "anthropic",
-			displayName: "Anthropic Claude",
+			providerId: "claude-bridge",
+			displayName: "Anthropic Claude (Bridge)",
 			planName: "Pro/Max",
 			capturedAt: now,
 			primaryWindow,

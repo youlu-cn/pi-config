@@ -1,7 +1,19 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { loadAuthStorage } from "../auth-helper.ts";
-import type { ProviderAdapter, ProviderQuotaReport } from "../types.ts";
+import type { ProviderAdapter, ProviderQuotaReport, QuotaWindow } from "../types.ts";
 import { buildQuotaWindow } from "./base.ts";
+
+function extractEmailFromJwt(token?: string): string | undefined {
+	if (!token || typeof token !== "string") return undefined;
+	const parts = token.split(".");
+	if (parts.length !== 3 || !parts[1]) return undefined;
+	try {
+		const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
+		return payload?.["https://api.openai.com/profile"]?.email || payload?.email;
+	} catch {
+		return undefined;
+	}
+}
 
 export class GptAdapter implements ProviderAdapter {
 	readonly id = "gpt";
@@ -10,7 +22,7 @@ export class GptAdapter implements ProviderAdapter {
 
 	isConfigured(ctx: ExtensionContext): boolean {
 		const auth = loadAuthStorage();
-		if (auth.openai || auth["openai-codex"] || process.env.OPENAI_API_KEY) return true;
+		if (auth["openai-codex"] || auth.openai) return true;
 		return (
 			ctx.model?.provider === "openai" || ctx.model?.provider === "openai-codex"
 		);
@@ -20,49 +32,114 @@ export class GptAdapter implements ProviderAdapter {
 		ctx: ExtensionContext,
 		signal: AbortSignal,
 	): Promise<ProviderQuotaReport> {
-		const auth = loadAuthStorage();
-		const entry = auth["openai-codex"] || auth.openai || {};
-		const token = entry.access_token || entry.apiKey || process.env.OPENAI_API_KEY;
+		let token: string | undefined;
 
-		const now = Date.now();
-		// 默认 5 小时滚动重置窗口
-		const reset5h = now + 5 * 3600 * 1000;
-		let remainingPercent = 100;
-
-		// 若存在有效 OAuth，可发起真实查询
-		if (token && typeof token === "string" && token.startsWith("eyJ")) {
+		// 1. 尝试从 Pi 运行时获取
+		if (ctx?.modelRegistry?.getProviderAuth) {
 			try {
-				const res = await fetch("https://chatgpt.com/backend-api/compliance/user", {
-					headers: { Authorization: `Bearer ${token}` },
-					signal,
-				});
-				if (res.ok) {
-					const data = (await res.json()) as any;
-					if (typeof data?.rate_limit?.remaining_percent === "number") {
-						remainingPercent = data.rate_limit.remaining_percent;
-					}
+				const res = await ctx.modelRegistry.getProviderAuth("openai-codex");
+				if (res?.auth?.apiKey) token = res.auth.apiKey;
+				if (!token && res?.auth?.headers?.Authorization) {
+					token = res.auth.headers.Authorization.replace(/^Bearer\s+/i, "");
 				}
-			} catch {
-				// 静默保底
-			}
+			} catch {}
 		}
 
-		const primaryWindow = buildQuotaWindow({
-			kind: "rolling",
-			label: "GPT 5h窗口",
-			remainingPercent,
-			windowMinutes: 300,
-			resetsAt: reset5h,
+		// 2. 从 auth.json 读取
+		if (!token) {
+			const auth = loadAuthStorage();
+			const entry = auth["openai-codex"] || auth.openai || {};
+			token = entry.access_token || entry.token || entry.access;
+		}
+
+		if (!token || typeof token !== "string" || !token.startsWith("eyJ")) {
+			throw new Error(
+				"OpenAI Codex subscription not configured. Run /login openai-codex to enable quota tracking.",
+			);
+		}
+
+		const now = Date.now();
+		const res = await fetch("https://chatgpt.com/backend-api/wham/usage", {
+			headers: {
+				Authorization: `Bearer ${token}`,
+				"User-Agent": "pi-provider-quota/1.0.0",
+			},
+			signal,
 		});
+
+		if (!res.ok) {
+			throw new Error(`ChatGPT usage endpoint returned status ${res.status}`);
+		}
+
+		const data = (await res.json()) as any;
+		const rateLimit = data?.rate_limit || {};
+		const windows: QuotaWindow[] = [];
+
+		// Primary 窗口 (通常为 5 小时滚动窗口)
+		if (rateLimit.primary_window) {
+			const pw = rateLimit.primary_window;
+			const usedPercent = typeof pw.used_percent === "number" ? pw.used_percent : 0;
+			const remainingPercent = Math.max(0, Math.min(100, Math.round(100 - usedPercent)));
+			const resetsAt = typeof pw.reset_at === "number" ? pw.reset_at * 1000 : undefined;
+			const windowMinutes =
+				typeof pw.limit_window_seconds === "number"
+					? Math.round(pw.limit_window_seconds / 60)
+					: 300;
+
+			windows.push(
+				buildQuotaWindow({
+					kind: "rolling",
+					groupId: "openai-codex",
+					groupLabel: "ChatGPT Subscription",
+					label: "GPT 5h",
+					modelKeys: ["gpt", "openai", "codex"],
+					remainingPercent,
+					windowMinutes,
+					resetsAt,
+				}),
+			);
+		}
+
+		// Secondary 窗口 (通常为周度限额)
+		if (rateLimit.secondary_window) {
+			const sw = rateLimit.secondary_window;
+			const usedPercent = typeof sw.used_percent === "number" ? sw.used_percent : 0;
+			const remainingPercent = Math.max(0, Math.min(100, Math.round(100 - usedPercent)));
+			const resetsAt = typeof sw.reset_at === "number" ? sw.reset_at * 1000 : undefined;
+			const windowMinutes =
+				typeof sw.limit_window_seconds === "number"
+					? Math.round(sw.limit_window_seconds / 60)
+					: 10080;
+
+			windows.push(
+				buildQuotaWindow({
+					kind: "weekly",
+					groupId: "openai-codex",
+					groupLabel: "ChatGPT Subscription",
+					label: "GPT 1w",
+					modelKeys: ["gpt", "openai", "codex"],
+					remainingPercent,
+					windowMinutes,
+					resetsAt,
+				}),
+			);
+		}
+
+		if (windows.length === 0) {
+			throw new Error("No rate limit windows returned by ChatGPT usage endpoint.");
+		}
+
+		const planName = data?.plan_type ? String(data.plan_type).toUpperCase() : "Plus/Pro";
+		const email = extractEmailFromJwt(token);
 
 		return {
 			providerId: "openai-codex",
 			displayName: "OpenAI / GPT",
-			accountEmail: entry.email,
-			planName: entry.plan || "Plus/Team",
+			accountEmail: email,
+			planName,
 			capturedAt: now,
-			primaryWindow,
-			windows: [primaryWindow],
+			primaryWindow: windows[0]!,
+			windows,
 		};
 	}
 }
