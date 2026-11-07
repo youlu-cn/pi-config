@@ -164,7 +164,7 @@ test("falls back and warns for invalid workAnimation values", () => {
 
 	assert.deepEqual(loaded.config.workAnimation, {
 		enabled: true,
-		intervalMs: 180,
+		intervalMs: 240,
 		placement: "aboveEditor",
 	});
 	assert.deepEqual(loaded.warnings, [

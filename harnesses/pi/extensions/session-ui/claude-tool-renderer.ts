@@ -33,7 +33,7 @@ interface ToolAnimState {
 function getSpinnerStep(
 	state: ToolAnimState,
 	context: ToolRenderContext,
-	intervalMs = 180,
+	intervalMs = 240,
 ): number {
 	if (!state.animTimer) {
 		state.frameIndex = 0;
@@ -73,7 +73,7 @@ export function registerClaudeToolRenderer(
 				const isError = context.isError === true;
 
 				const currentStyle = rendererOptions.getStyle?.() ?? "claude";
-				const currentIntervalMs = rendererOptions.getIntervalMs?.() ?? 180;
+				const currentIntervalMs = rendererOptions.getIntervalMs?.() ?? 240;
 
 				let animStep = 0;
 				if (!isDone) {

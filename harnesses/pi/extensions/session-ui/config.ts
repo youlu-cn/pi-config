@@ -74,7 +74,7 @@ export const DEFAULT_SESSION_UI_CONFIG: SessionUiConfig = {
 	},
 	workAnimation: {
 		enabled: true,
-		intervalMs: 180,
+		intervalMs: 240,
 		placement: "aboveEditor",
 	},
 	compactPaste: {

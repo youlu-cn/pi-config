@@ -5,7 +5,7 @@
   "workAnimation": {
     "enabled": true,
     "style": "claude",
-    "intervalMs": 180,
+    "intervalMs": 240,
     "placement": "aboveEditor"
   },
   "statusline": {

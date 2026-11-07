@@ -15,8 +15,8 @@ export function isValidAnimationStyle(value: unknown): value is AnimationStyle {
 }
 
 const STYLE_FRAMES: Record<Exclude<AnimationStyle, "dots">, readonly string[]> = {
-	// Claude Code starburst: visually prominent, balanced crisp stars, strictly narrow EAW (zero horizontal jitter)
-	claude: ["✦", "✶", "✷", "✹", "✷", "✶"],
+	// Claude Code starburst: visually prominent 8-point rotating stars, strictly narrow EAW, zero vertical/horizontal jitter
+	claude: ["✴", "✵", "✷", "✸", "✷", "✵"],
 	// Google Gemini sparkle pulse: crisp four-point stars
 	gemini: ["✧", "✦", "❖", "✦"],
 	// Smooth Braille circular spinner
@@ -49,7 +49,7 @@ export function renderGeminiDots(
  */
 export function renderSpinnerFrame(
 	step: number,
-	theme: { fg: (color: string, text: string) => string },
+	theme: { fg: (color: string, text: string) => string; bold?: (text: string) => string },
 	style: AnimationStyle = "claude",
 	dotsCount = 4,
 ): string {
@@ -58,7 +58,8 @@ export function renderSpinnerFrame(
 	}
 	const frames = STYLE_FRAMES[style] ?? STYLE_FRAMES.claude;
 	const idx = Math.abs(step) % frames.length;
-	return theme.fg("accent", frames[idx]!);
+	const colored = theme.fg("accent", frames[idx]!);
+	return typeof theme.bold === "function" ? theme.bold(colored) : colored;
 }
 
 /**
