@@ -33,8 +33,8 @@ test("renderSpinnerFrame supports claude, gemini, braille, and dots styles", () 
 	const theme = { fg: (color: string, text: string) => `[${color}]${text}[/${color}]` };
 
 	assert.equal(renderSpinnerFrame(0, theme, "claude"), "[accent]✢[/accent]");
-	assert.equal(renderSpinnerFrame(1, theme, "claude"), "[accent]✣[/accent]");
-	assert.equal(renderSpinnerFrame(5, theme, "claude"), "[accent]✽[/accent]");
+	assert.equal(renderSpinnerFrame(1, theme, "claude"), "[accent]✦[/accent]");
+	assert.equal(renderSpinnerFrame(3, theme, "claude"), "[accent]✳[/accent]");
 
 	assert.equal(renderSpinnerFrame(0, theme, "gemini"), "[accent]✧[/accent]");
 	assert.equal(renderSpinnerFrame(1, theme, "gemini"), "[accent]✦[/accent]");
