@@ -1,4 +1,12 @@
 import type { AgentMessage, ExtensionContext, ModelSelectEvent } from "@earendil-works/pi-coding-agent";
+import { estimateTokensFromChars, extractMessageText } from "./telemetry.ts";
+
+export interface DehydrationPassStats {
+	omittedTools: number;
+	omittedSavedChars: number;
+	omittedSavedTokens: number;
+	modified: boolean;
+}
 
 export class ContextGuard {
 	/**
@@ -13,8 +21,20 @@ export class ContextGuard {
 	/** Character threshold for large tool outputs */
 	private readonly threshold: number;
 
+	/** Stats from the most recent protectContextOnModelSwitch call. */
+	private lastDehydrationStats: DehydrationPassStats = {
+		omittedTools: 0,
+		omittedSavedChars: 0,
+		omittedSavedTokens: 0,
+		modified: false,
+	};
+
 	constructor(threshold = 1200) {
 		this.threshold = threshold;
+	}
+
+	public getLastDehydrationStats(): DehydrationPassStats {
+		return { ...this.lastDehydrationStats };
 	}
 
 	/**
@@ -160,6 +180,13 @@ export class ContextGuard {
 		messages: AgentMessage[],
 		currentModelId: string,
 	): AgentMessage[] | null {
+		this.lastDehydrationStats = {
+			omittedTools: 0,
+			omittedSavedChars: 0,
+			omittedSavedTokens: 0,
+			modified: false,
+		};
+
 		if (!currentModelId || messages.length === 0) return null;
 
 		const messageModels = this.resolveMessageModels(messages, currentModelId);
@@ -203,28 +230,23 @@ export class ContextGuard {
 			}
 		}
 
+		this.lastDehydrationStats.modified = modified;
 		return modified ? result : null;
 	}
 
 	private pruneToolMessageIfNeeded(msg: any, targetModelId: string): any {
 		const toolName = msg.toolName || "tool";
-		let totalChars = 0;
-
-		if (Array.isArray(msg.content)) {
-			for (const c of msg.content) {
-				if (c && typeof c.text === "string") {
-					totalChars += c.text.length;
-				}
-			}
-		} else if (typeof msg.content === "string") {
-			totalChars = msg.content.length;
-		}
+		const totalChars = extractMessageText(msg.content).length;
 
 		if (totalChars <= this.threshold) {
 			return msg;
 		}
 
 		const placeholder = `[Omitted: Cached '${toolName}' output (${totalChars} chars) pruned across model switch to ${targetModelId}. Architecture summary is retained in system context.]`;
+		const savedChars = Math.max(0, totalChars - placeholder.length);
+		this.lastDehydrationStats.omittedTools += 1;
+		this.lastDehydrationStats.omittedSavedChars += savedChars;
+		this.lastDehydrationStats.omittedSavedTokens += estimateTokensFromChars(savedChars);
 
 		return {
 			...msg,

@@ -1,9 +1,16 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "scoutModel": "antigravity/gemini-3.8-flash",
+  "scoutModel": "cursor/default",
   "architectModel": "antigravity/gemini-4-argon",
   "maxChangedFiles": 8,
   "maxSummaryTokens": 2000,
   "maxArchitectContextTokens": 5000,
-  "largeToolOutputCharThreshold": 1200
+  "largeToolOutputCharThreshold": 1200,
+  "injectRepoCacheOn": "heavy",
+  "telemetryEnabled": true,
+  "telemetryHeavyModelPattern": "argon|opus|o1|o3|gpt-5|claude-4|sonnet-4|reasoner|thinking",
+  "telemetryDehydrationNotifyRatio": 0.1,
+  "telemetryDehydrationMinOmittedTools": 1,
+  "telemetryCacheBustHitRateFloor": 0.5,
+  "telemetryAlwaysShow": true
 }

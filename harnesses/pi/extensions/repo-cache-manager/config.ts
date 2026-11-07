@@ -16,6 +16,25 @@ export interface RepoCacheManagerConfig {
 	maxArchitectContextTokens: number;
 	/** Character threshold for pruning large tool outputs during cross-model switches, default: 1200 chars */
 	largeToolOutputCharThreshold: number;
+	/**
+	 * When to inject repo_cache into the system prompt.
+	 * - "heavy": only for heavy models (default; light turns pay no summary tax)
+	 * - "always": every turn
+	 * - "never": never inject (dehydration-only)
+	 */
+	injectRepoCacheOn: "heavy" | "always" | "never";
+	/** Enable full-chain cache / context telemetry audit cards. */
+	telemetryEnabled: boolean;
+	/** Regex matched against provider/modelId to detect heavy models (Argon/Opus/…). */
+	telemetryHeavyModelPattern: string;
+	/** Local dehydration notify threshold as saved-token ratio (0–1). */
+	telemetryDehydrationNotifyRatio: number;
+	/** Minimum omitted tool messages before dehydration trigger. */
+	telemetryDehydrationMinOmittedTools: number;
+	/** Cloud cache hit-rate floor; drop from >= floor to below → cache_bust. */
+	telemetryCacheBustHitRateFloor: number;
+	/** Always emit audit card every turn (default true; false = trigger-only). */
+	telemetryAlwaysShow: boolean;
 }
 
 export const DEFAULT_CONFIG: RepoCacheManagerConfig = {
@@ -25,6 +44,13 @@ export const DEFAULT_CONFIG: RepoCacheManagerConfig = {
 	maxSummaryTokens: 2000,
 	maxArchitectContextTokens: 5000,
 	largeToolOutputCharThreshold: 1200,
+	injectRepoCacheOn: "heavy",
+	telemetryEnabled: true,
+	telemetryHeavyModelPattern: "argon|opus|o1|o3|gpt-5|claude-4|sonnet-4|reasoner|thinking",
+	telemetryDehydrationNotifyRatio: 0.1,
+	telemetryDehydrationMinOmittedTools: 1,
+	telemetryCacheBustHitRateFloor: 0.5,
+	telemetryAlwaysShow: true,
 };
 
 export function loadConfig(cwd: string = process.cwd()): RepoCacheManagerConfig {
