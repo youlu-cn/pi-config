@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { StatuslineOverflow } from "./statusline-core.ts";
+import type { DiffIndicatorMode, DiffViewMode } from "./rich-diff-core.ts";
+import type { TokenRateMode } from "./token-rate.ts";
 import {
 	isValidAnimationStyle,
 	VALID_ANIMATION_STYLES,
@@ -8,6 +10,7 @@ import {
 } from "./work-animation-core.ts";
 
 export type WidgetPlacement = "aboveEditor" | "belowEditor";
+export type ClaudeToolStyleMode = "on" | "compact" | "off";
 
 export interface SessionUiConfig {
 	toolActivity: {
@@ -20,14 +23,49 @@ export interface SessionUiConfig {
 		style?: AnimationStyle;
 		intervalMs: number;
 		placement: WidgetPlacement;
+		/** Append ↓ tokens · elapsed · tok/s · TTFT to the working row. */
+		showStats: boolean;
+		showTtft: boolean;
+		tokenRateMode: TokenRateMode;
+	};
+	agentSummary: {
+		enabled: boolean;
+		minToolCount: number;
+	};
+	compactThinking: {
+		enabled: boolean;
+		previewLines: number;
+		completedPreviewLines: number | null;
+		animationIntervalMs: number;
 	};
 	compactPaste: {
+		enabled: boolean;
+	};
+	/** Claude Code-style ❯ prompt prefix. */
+	editorPrefix: {
+		enabled: boolean;
+	};
+	/** /clear → new session, /exit → shutdown. */
+	aliases: {
+		enabled: boolean;
+	};
+	/** AskUserQuestion / Codemode / Subagent dedicated cards. */
+	specialCards: {
 		enabled: boolean;
 	};
 	claudeToolStyle: {
 		enabled: boolean;
 		style?: AnimationStyle;
 		intervalMs?: number;
+		/** on = rich cards; compact = one-line until expand; off = native Pi renderer */
+		mode: ClaudeToolStyleMode;
+		/** Collapse consecutive tool cards into a group header. */
+		grouping: boolean;
+		diffViewMode: DiffViewMode;
+		diffIndicatorMode: DiffIndicatorMode;
+		diffSplitMinWidth: number;
+		editDiffCollapsedLines: number;
+		writeDiffCollapsedLines: number;
 	};
 	statusline: {
 		enabled: boolean;
@@ -76,12 +114,41 @@ export const DEFAULT_SESSION_UI_CONFIG: SessionUiConfig = {
 		enabled: true,
 		intervalMs: 240,
 		placement: "aboveEditor",
+		showStats: true,
+		showTtft: true,
+		tokenRateMode: "average",
+	},
+	agentSummary: {
+		enabled: true,
+		minToolCount: 1,
+	},
+	compactThinking: {
+		enabled: true,
+		previewLines: 3,
+		completedPreviewLines: 1,
+		animationIntervalMs: 90,
 	},
 	compactPaste: {
 		enabled: true,
 	},
+	editorPrefix: {
+		enabled: true,
+	},
+	aliases: {
+		enabled: true,
+	},
+	specialCards: {
+		enabled: true,
+	},
 	claudeToolStyle: {
 		enabled: true,
+		mode: "on",
+		grouping: true,
+		diffViewMode: "auto",
+		diffIndicatorMode: "bars",
+		diffSplitMinWidth: 120,
+		editDiffCollapsedLines: 12,
+		writeDiffCollapsedLines: 8,
 	},
 	statusline: {
 		enabled: true,
@@ -208,7 +275,12 @@ function parseConfig(raw: unknown, warnings: string[]): SessionUiConfig {
 
 	const toolActivity = objectValue(raw.toolActivity, "toolActivity", warnings);
 	const workAnimation = objectValue(raw.workAnimation, "workAnimation", warnings);
+	const agentSummary = objectValue(raw.agentSummary, "agentSummary", warnings);
+	const compactThinking = objectValue(raw.compactThinking, "compactThinking", warnings);
 	const compactPaste = objectValue(raw.compactPaste, "compactPaste", warnings);
+	const editorPrefix = objectValue(raw.editorPrefix, "editorPrefix", warnings);
+	const aliases = objectValue(raw.aliases, "aliases", warnings);
+	const specialCards = objectValue(raw.specialCards, "specialCards", warnings);
 	const claudeToolStyle = objectValue(raw.claudeToolStyle, "claudeToolStyle", warnings);
 	const statusline = objectValue(raw.statusline, "statusline", warnings);
 	const extensionStatuses = objectValue(
@@ -259,6 +331,32 @@ function parseConfig(raw: unknown, warnings: string[]): SessionUiConfig {
 		}
 	}
 
+	let tokenRateMode = DEFAULT_SESSION_UI_CONFIG.workAnimation.tokenRateMode;
+	if (workAnimation.tokenRateMode !== undefined) {
+		if (workAnimation.tokenRateMode === "average" || workAnimation.tokenRateMode === "live") {
+			tokenRateMode = workAnimation.tokenRateMode;
+		} else {
+			warnings.push("workAnimation.tokenRateMode must be average or live");
+		}
+	}
+
+	let compactCompletedPreview: number | null =
+		DEFAULT_SESSION_UI_CONFIG.compactThinking.completedPreviewLines;
+	if (compactThinking.completedPreviewLines !== undefined) {
+		if (
+			compactThinking.completedPreviewLines === null ||
+			(typeof compactThinking.completedPreviewLines === "number" &&
+				Number.isInteger(compactThinking.completedPreviewLines) &&
+				compactThinking.completedPreviewLines >= 0)
+		) {
+			compactCompletedPreview = compactThinking.completedPreviewLines as number | null;
+		} else {
+			warnings.push(
+				"compactThinking.completedPreviewLines must be null or a non-negative integer",
+			);
+		}
+	}
+
 	let toolAnimationStyle: AnimationStyle | undefined;
 	if (claudeToolStyle.style !== undefined) {
 		if (isValidAnimationStyle(claudeToolStyle.style)) {
@@ -280,6 +378,45 @@ function parseConfig(raw: unknown, warnings: string[]): SessionUiConfig {
 			500,
 			warnings,
 		);
+	}
+
+	let toolMode: ClaudeToolStyleMode = DEFAULT_SESSION_UI_CONFIG.claudeToolStyle.mode;
+	if (claudeToolStyle.mode !== undefined) {
+		if (
+			claudeToolStyle.mode === "on" ||
+			claudeToolStyle.mode === "compact" ||
+			claudeToolStyle.mode === "off"
+		) {
+			toolMode = claudeToolStyle.mode;
+		} else {
+			warnings.push("claudeToolStyle.mode must be on, compact, or off");
+		}
+	}
+
+	let diffViewMode = DEFAULT_SESSION_UI_CONFIG.claudeToolStyle.diffViewMode;
+	if (claudeToolStyle.diffViewMode !== undefined) {
+		if (
+			claudeToolStyle.diffViewMode === "auto" ||
+			claudeToolStyle.diffViewMode === "unified" ||
+			claudeToolStyle.diffViewMode === "split"
+		) {
+			diffViewMode = claudeToolStyle.diffViewMode;
+		} else {
+			warnings.push("claudeToolStyle.diffViewMode must be auto, unified, or split");
+		}
+	}
+
+	let diffIndicatorMode = DEFAULT_SESSION_UI_CONFIG.claudeToolStyle.diffIndicatorMode;
+	if (claudeToolStyle.diffIndicatorMode !== undefined) {
+		if (
+			claudeToolStyle.diffIndicatorMode === "bars" ||
+			claudeToolStyle.diffIndicatorMode === "classic" ||
+			claudeToolStyle.diffIndicatorMode === "none"
+		) {
+			diffIndicatorMode = claudeToolStyle.diffIndicatorMode;
+		} else {
+			warnings.push("claudeToolStyle.diffIndicatorMode must be bars, classic, or none");
+		}
 	}
 
 	let overflow = DEFAULT_SESSION_UI_CONFIG.statusline.overflow;
@@ -341,12 +478,90 @@ function parseConfig(raw: unknown, warnings: string[]): SessionUiConfig {
 				warnings,
 			),
 			placement: animationPlacement,
+			showStats: booleanValue(
+				workAnimation.showStats,
+				DEFAULT_SESSION_UI_CONFIG.workAnimation.showStats,
+				"workAnimation.showStats",
+				warnings,
+			),
+			showTtft: booleanValue(
+				workAnimation.showTtft,
+				DEFAULT_SESSION_UI_CONFIG.workAnimation.showTtft,
+				"workAnimation.showTtft",
+				warnings,
+			),
+			tokenRateMode,
+		},
+		agentSummary: {
+			enabled: booleanValue(
+				agentSummary.enabled,
+				DEFAULT_SESSION_UI_CONFIG.agentSummary.enabled,
+				"agentSummary.enabled",
+				warnings,
+			),
+			minToolCount: boundedInteger(
+				agentSummary.minToolCount,
+				DEFAULT_SESSION_UI_CONFIG.agentSummary.minToolCount,
+				"agentSummary.minToolCount",
+				1,
+				50,
+				warnings,
+			),
+		},
+		compactThinking: {
+			enabled: booleanValue(
+				compactThinking.enabled,
+				DEFAULT_SESSION_UI_CONFIG.compactThinking.enabled,
+				"compactThinking.enabled",
+				warnings,
+			),
+			previewLines: boundedInteger(
+				compactThinking.previewLines,
+				DEFAULT_SESSION_UI_CONFIG.compactThinking.previewLines,
+				"compactThinking.previewLines",
+				0,
+				40,
+				warnings,
+			),
+			completedPreviewLines: compactCompletedPreview,
+			animationIntervalMs: boundedInteger(
+				compactThinking.animationIntervalMs,
+				DEFAULT_SESSION_UI_CONFIG.compactThinking.animationIntervalMs,
+				"compactThinking.animationIntervalMs",
+				40,
+				500,
+				warnings,
+			),
 		},
 		compactPaste: {
 			enabled: booleanValue(
 				compactPaste.enabled,
 				DEFAULT_SESSION_UI_CONFIG.compactPaste.enabled,
 				"compactPaste.enabled",
+				warnings,
+			),
+		},
+		editorPrefix: {
+			enabled: booleanValue(
+				editorPrefix.enabled,
+				DEFAULT_SESSION_UI_CONFIG.editorPrefix.enabled,
+				"editorPrefix.enabled",
+				warnings,
+			),
+		},
+		aliases: {
+			enabled: booleanValue(
+				aliases.enabled,
+				DEFAULT_SESSION_UI_CONFIG.aliases.enabled,
+				"aliases.enabled",
+				warnings,
+			),
+		},
+		specialCards: {
+			enabled: booleanValue(
+				specialCards.enabled,
+				DEFAULT_SESSION_UI_CONFIG.specialCards.enabled,
+				"specialCards.enabled",
 				warnings,
 			),
 		},
@@ -359,6 +574,39 @@ function parseConfig(raw: unknown, warnings: string[]): SessionUiConfig {
 			),
 			...(toolAnimationStyle !== undefined ? { style: toolAnimationStyle } : {}),
 			...(toolIntervalMs !== undefined ? { intervalMs: toolIntervalMs } : {}),
+			mode: toolMode,
+			grouping: booleanValue(
+				claudeToolStyle.grouping,
+				DEFAULT_SESSION_UI_CONFIG.claudeToolStyle.grouping,
+				"claudeToolStyle.grouping",
+				warnings,
+			),
+			diffViewMode,
+			diffIndicatorMode,
+			diffSplitMinWidth: boundedInteger(
+				claudeToolStyle.diffSplitMinWidth,
+				DEFAULT_SESSION_UI_CONFIG.claudeToolStyle.diffSplitMinWidth,
+				"claudeToolStyle.diffSplitMinWidth",
+				60,
+				300,
+				warnings,
+			),
+			editDiffCollapsedLines: boundedInteger(
+				claudeToolStyle.editDiffCollapsedLines,
+				DEFAULT_SESSION_UI_CONFIG.claudeToolStyle.editDiffCollapsedLines,
+				"claudeToolStyle.editDiffCollapsedLines",
+				0,
+				200,
+				warnings,
+			),
+			writeDiffCollapsedLines: boundedInteger(
+				claudeToolStyle.writeDiffCollapsedLines,
+				DEFAULT_SESSION_UI_CONFIG.claudeToolStyle.writeDiffCollapsedLines,
+				"claudeToolStyle.writeDiffCollapsedLines",
+				0,
+				200,
+				warnings,
+			),
 		},
 		statusline: {
 			enabled: booleanValue(

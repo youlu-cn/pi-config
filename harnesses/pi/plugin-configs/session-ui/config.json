@@ -6,7 +6,39 @@
     "enabled": true,
     "style": "claude",
     "intervalMs": 240,
-    "placement": "aboveEditor"
+    "placement": "aboveEditor",
+    "showStats": true,
+    "showTtft": true,
+    "tokenRateMode": "average"
+  },
+  "agentSummary": {
+    "enabled": true,
+    "minToolCount": 1
+  },
+  "compactThinking": {
+    "enabled": true,
+    "previewLines": 3,
+    "completedPreviewLines": 1,
+    "animationIntervalMs": 90
+  },
+  "editorPrefix": {
+    "enabled": true
+  },
+  "aliases": {
+    "enabled": true
+  },
+  "specialCards": {
+    "enabled": true
+  },
+  "claudeToolStyle": {
+    "enabled": true,
+    "mode": "on",
+    "grouping": true,
+    "diffViewMode": "auto",
+    "diffIndicatorMode": "bars",
+    "diffSplitMinWidth": 120,
+    "editDiffCollapsedLines": 12,
+    "writeDiffCollapsedLines": 8
   },
   "statusline": {
     "segments": [

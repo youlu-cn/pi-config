@@ -7,6 +7,8 @@ import {
 	formatGeminiDots,
 	formatEditDiffPreview,
 	formatWritePreview,
+	getVisibleColumnWidth,
+	truncateParamSummary,
 } from "./claude-tool-renderer-core.ts";
 
 const mockTheme = {
@@ -168,4 +170,72 @@ test("formatErrorLines builds tree-structured red error message", () => {
 	assert.ok(formatted.includes("[error]"));
 	assert.ok(formatted.includes("└ Error: planka-server@ /Users/boris/code/demo/server"));
 	assert.ok(formatted.includes("└── (empty)"));
+});
+
+test("formatToolHeader adapts to screen width and does not limit when within available width", () => {
+	const cwd = "/Users/boris/code/demo";
+	const longCommand =
+		'python3 -c " from PIL import Image im = Image.open(\'/tmp/helmcode_screen_60.png\') # Header background is (230, 232, 237) or similar in line"';
+
+	// 1. Without maxColumns specified (unlimited/testing): no truncation, full command shown
+	const unlimitedHeader = formatToolHeader(
+		"bash",
+		{ command: longCommand },
+		cwd,
+		mockTheme,
+		true,
+		false,
+	);
+	assert.ok(unlimitedHeader.includes(longCommand));
+	assert.ok(!unlimitedHeader.includes("..."));
+
+	// 2. Wide screen (e.g. 300 columns, typical for ultra-wide or full-width terminal):
+	// Command length is ~140 chars, fits well within 300 cols -> no truncation at all!
+	const wideHeader = formatToolHeader(
+		"bash",
+		{ command: longCommand },
+		cwd,
+		mockTheme,
+		true,
+		false,
+		0,
+		"claude",
+		300,
+	);
+	assert.ok(wideHeader.includes(longCommand));
+	assert.ok(!wideHeader.includes("..."));
+
+	// 3. Narrow screen (e.g. 60 columns):
+	// Total line width must adapt and fit into 60 columns with trailing ellipsis
+	const narrowHeader = formatToolHeader(
+		"bash",
+		{ command: longCommand },
+		cwd,
+		mockTheme,
+		true,
+		false,
+		0,
+		"claude",
+		60,
+	);
+	assert.ok(narrowHeader.includes("..."));
+	const visibleWidth = getVisibleColumnWidth(narrowHeader);
+	assert.ok(visibleWidth <= 60, `Header width ${visibleWidth} exceeds 60 columns`);
+
+	// 4. In-progress tool call with suffix '(esc to interrupt)' also adapts to width
+	const runningNarrow = formatToolHeader(
+		"bash",
+		{ command: longCommand },
+		cwd,
+		mockTheme,
+		false,
+		false,
+		0,
+		"claude",
+		80,
+	);
+	assert.ok(runningNarrow.includes("(esc to interrupt)"));
+	assert.ok(runningNarrow.includes("..."));
+	const runningWidth = getVisibleColumnWidth(runningNarrow);
+	assert.ok(runningWidth <= 80, `Running header width ${runningWidth} exceeds 80 columns`);
 });

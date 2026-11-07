@@ -24,6 +24,7 @@ import {
 	PASTE_MARKER_RE,
 	supportsImagePreviewMime,
 } from "./compact-paste-core.ts";
+import { renderWithPromptPrefix } from "./prompt-editor.ts";
 
 export {
 	imageMimeType,
@@ -654,13 +655,35 @@ export class CompactPasteEditor extends CustomEditor {
 	}
 }
 
-export function registerCompactPasteEditor(pi: ExtensionAPI): void {
+/** Compact-paste editor that also paints the Claude Code ❯ prefix. */
+export class CompactPastePromptEditor extends CompactPasteEditor {
+	render(width: number): string[] {
+		return renderWithPromptPrefix(
+			this as unknown as { paddingX: number; borderColor: (text: string) => string },
+			(w) => super.render(w),
+			width,
+		);
+	}
+}
+
+export interface CompactPasteEditorOptions {
+	/** Compose Claude Code ❯ into the same editor slot (default false). */
+	promptPrefix?: boolean;
+}
+
+export function registerCompactPasteEditor(
+	pi: ExtensionAPI,
+	options: CompactPasteEditorOptions = {},
+): void {
 	let activeEditor: CompactPasteEditor | undefined;
+	const promptPrefix = options.promptPrefix === true;
 
 	pi.on("session_start", (_event, ctx) => {
 		if (!ctx.hasUI || ctx.mode !== "tui") return;
 		ctx.ui.setEditorComponent((tui, theme, keybindings) => {
-			const editor = new CompactPasteEditor(tui, theme, keybindings);
+			const editor = promptPrefix
+				? new CompactPastePromptEditor(tui, theme, keybindings)
+				: new CompactPasteEditor(tui, theme, keybindings);
 			activeEditor = editor;
 			editor.setImagePreviewTheme(() => ctx.ui.theme);
 			editor.onCompatibilityFallback = (reason) => {

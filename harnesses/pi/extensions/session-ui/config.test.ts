@@ -133,6 +133,61 @@ test("loads optional UI metadata controls and name length limits", () => {
 	assert.deepEqual(loaded.warnings, []);
 });
 
+test("loads agentSummary, compactThinking, and workAnimation stats options", () => {
+	const result = withConfig({
+		workAnimation: {
+			showStats: false,
+			showTtft: false,
+			tokenRateMode: "live",
+		},
+		agentSummary: { enabled: true, minToolCount: 2 },
+		compactThinking: {
+			enabled: true,
+			previewLines: 5,
+			completedPreviewLines: 0,
+			animationIntervalMs: 120,
+		},
+		editorPrefix: { enabled: false },
+		aliases: { enabled: false },
+		specialCards: { enabled: false },
+	});
+	assert.equal(result.config.workAnimation.showStats, false);
+	assert.equal(result.config.workAnimation.showTtft, false);
+	assert.equal(result.config.workAnimation.tokenRateMode, "live");
+	assert.equal(result.config.agentSummary.minToolCount, 2);
+	assert.equal(result.config.compactThinking.previewLines, 5);
+	assert.equal(result.config.compactThinking.completedPreviewLines, 0);
+	assert.equal(result.config.compactThinking.animationIntervalMs, 120);
+	assert.equal(result.config.editorPrefix.enabled, false);
+	assert.equal(result.config.aliases.enabled, false);
+	assert.equal(result.config.specialCards.enabled, false);
+});
+
+test("loads claudeToolStyle mode, grouping, and diff options", () => {
+	const result = withConfig({
+		claudeToolStyle: {
+			mode: "compact",
+			grouping: false,
+			diffViewMode: "split",
+			diffIndicatorMode: "classic",
+			diffSplitMinWidth: 100,
+			editDiffCollapsedLines: 6,
+			writeDiffCollapsedLines: 4,
+		},
+	});
+	assert.equal(result.config.claudeToolStyle.mode, "compact");
+	assert.equal(result.config.claudeToolStyle.grouping, false);
+	assert.equal(result.config.claudeToolStyle.diffViewMode, "split");
+	assert.equal(result.config.claudeToolStyle.diffIndicatorMode, "classic");
+	assert.equal(result.config.claudeToolStyle.diffSplitMinWidth, 100);
+	assert.equal(result.config.claudeToolStyle.editDiffCollapsedLines, 6);
+	assert.equal(result.config.claudeToolStyle.writeDiffCollapsedLines, 4);
+
+	const bad = withConfig({ claudeToolStyle: { mode: "nope" } });
+	assert.ok(bad.warnings.some((w) => w.includes("claudeToolStyle.mode")));
+	assert.equal(bad.config.claudeToolStyle.mode, "on");
+});
+
 test("loads the integrated workAnimation config", () => {
 	const loaded = withConfig({
 		workAnimation: {
@@ -148,6 +203,9 @@ test("loads the integrated workAnimation config", () => {
 		style: "gemini",
 		intervalMs: 500,
 		placement: "belowEditor",
+		showStats: true,
+		showTtft: true,
+		tokenRateMode: "average",
 	});
 	assert.deepEqual(loaded.warnings, []);
 });
@@ -166,6 +224,9 @@ test("falls back and warns for invalid workAnimation values", () => {
 		enabled: true,
 		intervalMs: 240,
 		placement: "aboveEditor",
+		showStats: true,
+		showTtft: true,
+		tokenRateMode: "average",
 	});
 	assert.deepEqual(loaded.warnings, [
 		"workAnimation.placement must be aboveEditor or belowEditor",

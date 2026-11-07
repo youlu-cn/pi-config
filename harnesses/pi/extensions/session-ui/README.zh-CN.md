@@ -20,8 +20,14 @@ Pi 终端界面扩展：底部单行状态栏、工具调用面板、工作动�
 
 | 模块 | 命令 / 交互 | 说明 |
 | --- | --- | --- |
+| Claude 工具卡 | `/tool-style [on\|compact\|off\|status]` | Rich Diff（bars/分栏）、连续工具分组、单击/`Ctrl+O` 展开；`compact` 折叠时只留一行摘要 |
+| 专用工具卡 | 自动显示 | AskUserQuestion Q&A 树、Codemode 嵌套调用树、Subagent 完成通知 |
+| Agent Summary | 自动显示 | 回合结束追加 `│ Ran 1 command, wrote 1 file · 15s`（不进 LLM 上下文） |
+| Compact Thinking | 自动显示 | 思考块折叠为标题动画 + 预览 N 行；点击展开全文；完成态显示 `Thought for Xs` |
+| 输入框前缀 | 自动 | Claude Code 风格 `❯` 提示符 |
+| 别名 | `/clear` · `/exit` | `/clear` 开新会话；`/exit` 退出 |
 | 工具活动 | 自动显示 | 输入框上方列出本轮调用（`◆` 运行中、`◇` 完成、`✗` 失败；Codemode 内部调用缩进），回合结束清空 |
-| 工作动画 | `/work-animation on\|off\|status` | 开关保存在 `~/.pi/agent/state/session-ui.json`，优先级高于配置文件 |
+| 工作动画 | `/work-animation on\|off\|status` | Working 行附带 `↓ tokens · 耗时 · avg tok/s · TTFT`；开关保存在 `~/.pi/agent/state/session-ui.json` |
 | 图片粘贴与预览 | `Ctrl+V`（macOS） | 插入 `[image #1]` 标签，光标移入弹出预览（需 Kitty 或 iTerm2 图片协议；`Cmd+V` 仅粘贴文本） |
 | 状态栏 | `/statusline` | 临时切换自定义单行状态栏与原生底栏 |
 | 思考档位 | `/effort [level\|status]` | 无参数打开选择器，传档位名直接设置 |
@@ -52,10 +58,28 @@ Pi 终端界面扩展：底部单行状态栏、工具调用面板、工作动�
 - 默认路径：`~/.pi/agent/extensions/session-ui/config.json`（仓库源：[config.json](../../plugin-configs/session-ui/config.json)）
 - 环境变量覆盖：`PI_SESSION_UI_CONFIG=/absolute/path/to/session-ui.json pi`
 
-修改后 `/reload` 生效。各模块（`toolActivity`、`workAnimation`、`compactPaste`、`statusline`、`effort`、`turnSummary`、`uiMeta`）均默认开启，可设 `enabled: false` 关闭：
+修改后 `/reload` 生效。各模块（`toolActivity`、`workAnimation`、`agentSummary`、`compactThinking`、`editorPrefix`、`aliases`、`specialCards`、`compactPaste`、`claudeToolStyle`、`statusline`、`effort`、`turnSummary`、`uiMeta`）均默认开启，可设 `enabled: false` 关闭：
 
 | 配置项 | 默认值 | 可选值 / 范围 |
 | --- | --- | --- |
+| `editorPrefix.enabled` | `true` | 输入框 `❯` 前缀 |
+| `aliases.enabled` | `true` | `/clear`、`/exit` 别名 |
+| `specialCards.enabled` | `true` | AskUser / Codemode / Subagent 专用卡 |
+| `claudeToolStyle.mode` | `"on"` | `"on"` \| `"compact"` \| `"off"` |
+| `claudeToolStyle.grouping` | `true` | 连续工具卡折叠为组头 |
+| `claudeToolStyle.diffViewMode` | `"auto"` | `"auto"` \| `"unified"` \| `"split"` |
+| `claudeToolStyle.diffIndicatorMode` | `"bars"` | `"bars"` \| `"classic"` \| `"none"` |
+| `claudeToolStyle.diffSplitMinWidth` | `120` | 分栏最小终端宽度 |
+| `claudeToolStyle.editDiffCollapsedLines` | `12` | 折叠态 edit diff 行数；`0` 仅摘要 |
+| `claudeToolStyle.writeDiffCollapsedLines` | `8` | 折叠态 write 预览行数；`0` 仅摘要 |
+| `agentSummary.enabled` | `true` | 回合结束工具统计摘要行 |
+| `agentSummary.minToolCount` | `1` | 至少 N 次工具调用才输出摘要 |
+| `compactThinking.enabled` | `true` | 折叠思考块为标题 + 预览 |
+| `compactThinking.previewLines` | `3` | 流式中预览行数；`0` 仅标题 |
+| `compactThinking.completedPreviewLines` | `1` | 完成态预览行数；`null` 跟随 previewLines |
+| `workAnimation.showStats` | `true` | Working 行显示 token/耗时/速率 |
+| `workAnimation.showTtft` | `true` | 速率后附带 TTFT |
+| `workAnimation.tokenRateMode` | `"average"` | `"average"` \| `"live"` |
 | `toolActivity.placement` | `"aboveEditor"` | `"aboveEditor"` \| `"belowEditor"` |
 | `toolActivity.maxItems` | `6` | `1`–`20` |
 | `workAnimation.placement` | `"aboveEditor"` | `"aboveEditor"` \| `"belowEditor"` |

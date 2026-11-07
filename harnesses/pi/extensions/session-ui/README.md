@@ -20,8 +20,14 @@ Installs to `~/.pi/agent/extensions/session-ui/`. Restart Pi or run `/reload` to
 
 | Module | Command / Trigger | Description |
 | --- | --- | --- |
+| Claude tool cards | `/tool-style [on\|compact\|off\|status]` | Rich Diff (bars / split), consecutive tool grouping, click/`Ctrl+O` expand; `compact` keeps one-line summaries until expanded |
+| Special cards | Automatic | AskUserQuestion Q&A tree, Codemode nested-call tree, Subagent finished notification |
+| Agent Summary | Automatic | End-of-agent line `│ Ran 1 command, wrote 1 file · 15s` (non-LLM entry) |
+| Compact Thinking | Automatic | Collapses thinking to animated title + N preview lines; click to expand; completed shows `Thought for Xs` |
+| Editor prefix | Automatic | Claude Code-style `❯` prompt |
+| Aliases | `/clear` · `/exit` | `/clear` starts a new session; `/exit` shuts down |
 | Tool activity | Automatic | Lists current-turn tool calls above the editor (`◆` running, `◇` done, `✗` failed; nested Codemode calls are indented) and clears when the turn ends |
-| Work animation | `/work-animation on\|off\|status` | Persists toggle state in `~/.pi/agent/state/session-ui.json`, taking precedence over `config.json` |
+| Work animation | `/work-animation on\|off\|status` | Working row includes `↓ tokens · elapsed · avg tok/s · TTFT`; toggle persists in `~/.pi/agent/state/session-ui.json` |
 | Image paste & preview | `Ctrl+V` (macOS) | Inserts compact `[image #1]` placeholders; move the cursor onto a placeholder to preview (requires Kitty or iTerm2 image protocol; `Cmd+V` pastes text only) |
 | Statusline | `/statusline` | Temporarily switches between the custom single-line statusline and the native footer |
 | Thinking effort | `/effort [level\|status]` | Opens the level selector without arguments, or sets the level directly |
@@ -52,13 +58,32 @@ Displayed items and order are controlled by `statusline.segments`:
 - Default path: `~/.pi/agent/extensions/session-ui/config.json` (repo source: [config.json](../../plugin-configs/session-ui/config.json))
 - Environment override: `PI_SESSION_UI_CONFIG=/absolute/path/to/session-ui.json pi`
 
-Run `/reload` after editing. All modules (`toolActivity`, `workAnimation`, `compactPaste`, `statusline`, `effort`, `turnSummary`, `uiMeta`) are enabled by default and can be disabled with `enabled: false`:
+Run `/reload` after editing. All modules (`toolActivity`, `workAnimation`, `agentSummary`, `compactThinking`, `editorPrefix`, `aliases`, `specialCards`, `compactPaste`, `claudeToolStyle`, `statusline`, `effort`, `turnSummary`, `uiMeta`) are enabled by default and can be disabled with `enabled: false`:
 
 | Option | Default | Allowed Values / Range |
 | --- | --- | --- |
+| `editorPrefix.enabled` | `true` | `❯` prompt prefix |
+| `aliases.enabled` | `true` | `/clear` and `/exit` aliases |
+| `specialCards.enabled` | `true` | AskUser / Codemode / Subagent cards |
+| `claudeToolStyle.mode` | `"on"` | `"on"` \| `"compact"` \| `"off"` |
+| `claudeToolStyle.grouping` | `true` | Collapse consecutive tool cards into a group header |
+| `claudeToolStyle.diffViewMode` | `"auto"` | `"auto"` \| `"unified"` \| `"split"` |
+| `claudeToolStyle.diffIndicatorMode` | `"bars"` | `"bars"` \| `"classic"` \| `"none"` |
+| `claudeToolStyle.diffSplitMinWidth` | `120` | Min terminal width for split diffs |
+| `claudeToolStyle.editDiffCollapsedLines` | `12` | Collapsed edit diff lines; `0` = summary only |
+| `claudeToolStyle.writeDiffCollapsedLines` | `8` | Collapsed write preview lines; `0` = summary only |
+| `agentSummary.enabled` | `true` | End-of-agent tool summary line |
+| `agentSummary.minToolCount` | `1` | Emit summary after at least N tools |
+| `compactThinking.enabled` | `true` | Compact thinking blocks |
+| `compactThinking.previewLines` | `3` | Live preview lines |
+| `compactThinking.completedPreviewLines` | `1` | Completed preview lines; `null` follows previewLines |
+| `compactThinking.animationIntervalMs` | `90` | Title animation interval |
 | `toolActivity.placement` | `"aboveEditor"` | `"aboveEditor"` \| `"belowEditor"` |
 | `toolActivity.maxItems` | `6` | `1`–`20` |
 | `workAnimation.placement` | `"aboveEditor"` | `"aboveEditor"` \| `"belowEditor"` |
+| `workAnimation.showStats` | `true` | Show tokens / elapsed / tok/s on the working row |
+| `workAnimation.showTtft` | `true` | Include TTFT next to rate |
+| `workAnimation.tokenRateMode` | `"average"` | `"average"` \| `"live"` |
 | `workAnimation.intervalMs` | `180` | `100`–`500` (ms) |
 | `statusline.overflow` | `"drop-right"` | `"drop-right"` (hide from right) \| `"priority"` (compact first, then hide by priority) |
 | `statusline.segments` | Default list above | Array of segment IDs (replaces the full list and deduplicates) |

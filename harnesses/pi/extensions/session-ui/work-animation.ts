@@ -16,6 +16,23 @@ import {
 	loadWorkAnimationState,
 	saveWorkAnimationState,
 } from "./work-animation-state.ts";
+import {
+	carryTokenRate,
+	currentTtftMs,
+	displayTokenRate,
+	formatElapsed,
+	formatTokenCount,
+	formatTokenRate,
+	markFirstToken,
+	pauseTokenRate,
+	recordProviderUsage,
+	resetTokenRate,
+	resumeTokenRate,
+	sampleTokenDelta,
+	startMessageSegment,
+	totalTokens,
+	type TokenRateMode,
+} from "./token-rate.ts";
 
 type WorkAnimationConfig = SessionUiConfig["workAnimation"];
 
@@ -24,10 +41,16 @@ type ActiveTool = {
 };
 
 const WIDGET_ID = "session-ui:work-animation";
+const SHOW_TIMER_AFTER_MS = 3_000;
 
 export interface WorkAnimationController {
 	getStyle(): AnimationStyle;
 	getIntervalMs(): number;
+}
+
+function outputUsage(message: { usage?: { output?: unknown } } | undefined): number {
+	const value = Number(message?.usage?.output);
+	return Number.isFinite(value) && value > 0 ? Math.round(value) : 0;
 }
 
 export function registerWorkAnimation(
@@ -45,9 +68,28 @@ export function registerWorkAnimation(
 	let frameIndex = 0;
 	let phase = "Working...";
 	const activeTools = new Map<string, ActiveTool>();
+	let agentStartTime = 0;
+	let rateRunStartTime = 0;
+	const rateMode: TokenRateMode = config.tokenRateMode ?? "average";
+	const showTtft = config.showTtft !== false;
+	const showWorkingStats = config.showStats !== false;
 
 	const renderOnce = () => requestRender?.();
 	const isTui = (ctx: ExtensionContext) => ctx.hasUI && ctx.mode === "tui";
+
+	const buildStatsSuffix = (): string => {
+		if (!showWorkingStats || !agentStartTime) return "";
+		const parts: string[] = [];
+		const tokens = totalTokens();
+		if (tokens > 0) parts.push(`↓ ${formatTokenCount(tokens)} tok`);
+		const elapsed = Date.now() - agentStartTime;
+		if (elapsed >= SHOW_TIMER_AFTER_MS || tokens > 0) {
+			parts.push(formatElapsed(elapsed));
+		}
+		const rate = formatTokenRate(displayTokenRate(rateMode), currentTtftMs(), rateMode, showTtft);
+		if (rate) parts.push(rate);
+		return parts.length ? ` (${parts.join(" · ")})` : "";
+	};
 
 	const stopTimer = () => {
 		if (timer) clearInterval(timer);
@@ -133,7 +175,8 @@ export function registerWorkAnimation(
 					render(width: number): string[] {
 						if (!running || !config.enabled) return [];
 						const spinner = renderSpinnerFrame(frameIndex, theme, activeStyle, 4);
-						const line = `${spinner}  ${theme.fg("muted", phase)}`;
+						const stats = buildStatsSuffix();
+						const line = `${spinner}  ${theme.fg("muted", `${phase}${stats}`)}`;
 						return [truncateToWidth(line, Math.max(1, width), "")];
 					},
 					invalidate() {},
@@ -146,11 +189,64 @@ export function registerWorkAnimation(
 
 	pi.on("agent_start", (_event, ctx) => {
 		titleController.setWorking(true);
+		const now = Date.now();
+		if (!agentStartTime) agentStartTime = now;
+		if (rateRunStartTime !== agentStartTime) {
+			rateRunStartTime = agentStartTime;
+			resetTokenRate(agentStartTime);
+		}
 		startAnimation(ctx);
+	});
+
+	pi.on("turn_start", (event) => {
+		const now = event?.timestamp || Date.now();
+		if (!agentStartTime) agentStartTime = now;
+		if (rateRunStartTime !== agentStartTime) {
+			rateRunStartTime = agentStartTime;
+			resetTokenRate(now);
+		}
+		startMessageSegment(now);
+	});
+
+	pi.on("message_update", (event) => {
+		const evt = (event as { assistantMessageEvent?: any })?.assistantMessageEvent;
+		if (!evt) return;
+		if (
+			evt.type === "thinking_start" ||
+			evt.type === "text_start" ||
+			evt.type === "toolcall_start"
+		) {
+			markFirstToken();
+			const output = outputUsage(evt.partial);
+			if (output > 0) recordProviderUsage(output);
+		} else if (
+			evt.type === "thinking_delta" ||
+			evt.type === "text_delta" ||
+			evt.type === "toolcall_delta"
+		) {
+			if (typeof evt.delta === "string") sampleTokenDelta(evt.delta);
+			const output = outputUsage(evt.partial);
+			if (output > 0) recordProviderUsage(output);
+		} else if (evt.type === "text_end" || evt.type === "thinking_end") {
+			const output = outputUsage(evt.partial);
+			if (output > 0) recordProviderUsage(output);
+		}
+		renderOnce();
+	});
+
+	pi.on("message_end", (event) => {
+		const message = (event as { message?: { role?: string; usage?: { output?: unknown }; stopReason?: string } })
+			?.message;
+		if (message?.role !== "assistant") return;
+		const failed = message.stopReason === "error" || message.stopReason === "aborted";
+		const output = outputUsage(message);
+		if (output > 0) recordProviderUsage(output, Date.now(), !failed);
+		renderOnce();
 	});
 
 	pi.on("tool_execution_start", (event, ctx) => {
 		if (!config.enabled) return;
+		pauseTokenRate();
 		const toolName = event.toolName || "tool";
 		const toolPhase = phaseForTool(toolName);
 		activeTools.set(event.toolCallId, { phase: toolPhase });
@@ -160,14 +256,26 @@ export function registerWorkAnimation(
 
 	pi.on("tool_execution_end", (event) => {
 		if (!config.enabled) return;
+		resumeTokenRate();
 		activeTools.delete(event.toolCallId);
 		updatePhase();
+	});
+
+	pi.on("turn_end", () => {
+		carryTokenRate();
 	});
 
 	pi.on("agent_settled", (_event, ctx) => {
 		if (!ctx.isIdle()) return;
 		titleController.setWorking(false);
 		stopAnimation();
+		agentStartTime = 0;
+		rateRunStartTime = 0;
+	});
+
+	pi.on("agent_end", () => {
+		agentStartTime = 0;
+		rateRunStartTime = 0;
 	});
 
 	pi.on("session_shutdown", (_event, ctx) => {

@@ -30,6 +30,83 @@ export function formatPath(rawPath: unknown, cwd: string): string {
 	return rawPath;
 }
 
+/**
+ * Calculate visible terminal column width, properly ignoring ANSI escape sequences
+ * and counting East Asian / wide characters as 2 columns.
+ */
+export function getVisibleColumnWidth(str: string): number {
+	if (!str) return 0;
+	// Strip ANSI escape sequences and mock theme tags ([color]...[/color], <b>...</b>)
+	const cleaned = str
+		.replace(/\u001B\[[0-?]*[ -/]*[@-~]/g, "")
+		.replace(/\[\/?[a-zA-Z0-9_-]+\]/g, "")
+		.replace(/<\/?\w+>/g, "");
+	let width = 0;
+	for (const ch of cleaned) {
+		const code = ch.codePointAt(0) ?? 0;
+		if (
+			(code >= 0x1100 && code <= 0x115f) ||
+			(code >= 0x2e80 && code <= 0xa4cf && code !== 0x303f) ||
+			(code >= 0xac00 && code <= 0xd7a3) ||
+			(code >= 0xf900 && code <= 0xfaff) ||
+			(code >= 0xfe10 && code <= 0xfe19) ||
+			(code >= 0xfe30 && code <= 0xfe6f) ||
+			(code >= 0xff00 && code <= 0xff60) ||
+			(code >= 0xffe0 && code <= 0xffe6) ||
+			(code >= 0x20000 && code <= 0x2fffd) ||
+			(code >= 0x30000 && code <= 0x3fffd)
+		) {
+			width += 2;
+		} else {
+			width += 1;
+		}
+	}
+	return width;
+}
+
+/**
+ * Adaptively truncate text to fit within maxColumns while respecting wide characters.
+ * If text already fits within maxColumns (or maxColumns is undefined), it is NOT truncated.
+ */
+export function truncateParamSummary(text: string, maxCols?: number): string {
+	if (!text || maxCols === undefined || maxCols <= 0) return text;
+	const currentWidth = getVisibleColumnWidth(text);
+	if (currentWidth <= maxCols) return text;
+
+	if (maxCols <= 3) {
+		return "...".slice(0, maxCols);
+	}
+
+	const targetWidth = maxCols - 3;
+	let accumulatedWidth = 0;
+	let cutIndex = 0;
+
+	for (const ch of text) {
+		const code = ch.codePointAt(0) ?? 0;
+		const w =
+			(code >= 0x1100 && code <= 0x115f) ||
+			(code >= 0x2e80 && code <= 0xa4cf && code !== 0x303f) ||
+			(code >= 0xac00 && code <= 0xd7a3) ||
+			(code >= 0xf900 && code <= 0xfaff) ||
+			(code >= 0xfe10 && code <= 0xfe19) ||
+			(code >= 0xfe30 && code <= 0xfe6f) ||
+			(code >= 0xff00 && code <= 0xff60) ||
+			(code >= 0xffe0 && code <= 0xffe6) ||
+			(code >= 0x20000 && code <= 0x2fffd) ||
+			(code >= 0x30000 && code <= 0x3fffd)
+				? 2
+				: 1;
+
+		if (accumulatedWidth + w > targetWidth) {
+			break;
+		}
+		accumulatedWidth += w;
+		cutIndex += ch.length;
+	}
+
+	return `${text.slice(0, cutIndex)}...`;
+}
+
 export function formatToolHeader(
 	toolName: string,
 	args: any,
@@ -39,6 +116,7 @@ export function formatToolHeader(
 	isError: boolean,
 	animStep = 0,
 	style: AnimationStyle = "claude",
+	maxColumns?: number,
 ): string {
 	let icon: string;
 	if (!isDone) {
@@ -50,34 +128,53 @@ export function formatToolHeader(
 	}
 
 	let displayName = capitalize(toolName);
-	let paramSummary = "";
+	let rawParamSummary = "";
 
 	if (toolName === "read") {
 		displayName = "Read";
 		const filePath = formatPath(args?.file_path ?? args?.path, cwd);
-		paramSummary = filePath;
+		rawParamSummary = filePath;
 		if (args?.offset !== undefined || args?.limit !== undefined) {
-			paramSummary += `:${args.offset ?? 1}${args.limit ? `-${(args.offset ?? 1) + args.limit - 1}` : ""}`;
+			rawParamSummary += `:${args.offset ?? 1}${args.limit ? `-${(args.offset ?? 1) + args.limit - 1}` : ""}`;
 		}
 	} else if (toolName === "bash") {
 		displayName = "Bash";
-		const cmd = typeof args?.command === "string" ? args.command.trim().replace(/\s+/g, " ") : "";
-		paramSummary = cmd.length > 140 ? `${cmd.slice(0, 137)}...` : cmd;
+		rawParamSummary = typeof args?.command === "string" ? args.command.trim().replace(/\s+/g, " ") : "";
 	} else if (toolName === "edit") {
 		displayName = "Edit";
-		paramSummary = formatPath(args?.file_path ?? args?.path, cwd);
+		rawParamSummary = formatPath(args?.file_path ?? args?.path, cwd);
 	} else if (toolName === "write") {
 		displayName = "Write";
-		paramSummary = formatPath(args?.file_path ?? args?.path, cwd);
+		rawParamSummary = formatPath(args?.file_path ?? args?.path, cwd);
 	} else if (toolName === "grep") {
 		displayName = "Grep";
 		const pat = typeof args?.pattern === "string" ? `"${args.pattern}"` : "";
 		const p = formatPath(args?.path, cwd);
-		paramSummary = p ? `${pat} in ${p}` : pat;
+		rawParamSummary = p ? `${pat} in ${p}` : pat;
 	} else if (toolName === "find") {
 		displayName = "Find";
 		const p = typeof args?.pattern === "string" ? `"${args.pattern}"` : formatPath(args?.path, cwd);
-		paramSummary = p;
+		rawParamSummary = p;
+	} else if (toolName === "ask_user_question") {
+		displayName = "AskUserQuestion";
+		const count = Array.isArray(args?.questions) ? args.questions.length : 0;
+		rawParamSummary = count > 0 ? `${count} question${count === 1 ? "" : "s"}` : "";
+	} else if (toolName === "codemode") {
+		displayName = "Codemode";
+		const code =
+			typeof args?.code === "string"
+				? args.code
+				: typeof args?.script === "string"
+					? args.script
+					: "";
+		const first = code
+			.split("\n")
+			.map((line: string) => line.trim())
+			.find(
+				(line: string) =>
+					line && !line.startsWith("//") && !line.startsWith("*") && !line.startsWith("/*"),
+			);
+		rawParamSummary = first ? first.replace(/\s+/g, " ") : "";
 	} else {
 		if (toolName.startsWith("mcp__")) {
 			const parts = toolName.slice(5).split("__");
@@ -86,22 +183,29 @@ export function formatToolHeader(
 		if (args && typeof args === "object") {
 			for (const k of Object.keys(args)) {
 				if (typeof args[k] === "string" && args[k].length > 0) {
-					const val = args[k].trim().replace(/\s+/g, " ");
-					paramSummary = val.length > 120 ? `${val.slice(0, 117)}...` : val;
+					rawParamSummary = args[k].trim().replace(/\s+/g, " ");
 					break;
 				}
 			}
 		}
 	}
 
+	const suffix = !isDone ? ` ${theme.fg("dim", "(esc to interrupt)")}` : "";
+
+	let paramSummary = rawParamSummary;
+	if (maxColumns !== undefined && maxColumns > 0) {
+		const fixedCols =
+			getVisibleColumnWidth(icon) +
+			getVisibleColumnWidth(displayName) +
+			(rawParamSummary ? 2 : 0) +
+			getVisibleColumnWidth(suffix);
+		const availableParamCols = maxColumns - fixedCols;
+		paramSummary = truncateParamSummary(rawParamSummary, availableParamCols);
+	}
+
 	const nameStyled = theme.bold(displayName);
 	const paramsStyled = paramSummary ? theme.fg("muted", `(${paramSummary})`) : "";
-	const header = `${icon}${nameStyled}${paramsStyled}`;
-
-	if (!isDone) {
-		return `${header} ${theme.fg("dim", "(esc to interrupt)")}`;
-	}
-	return header;
+	return `${icon}${nameStyled}${paramsStyled}${suffix}`;
 }
 
 export function getTextContent(content: unknown): string {
@@ -179,12 +283,12 @@ export function formatEditDiffPreview(
 			? statsParts.join(", ")
 			: `${edits?.length ?? 1} replacement${(edits?.length ?? 1) === 1 ? "" : "s"} applied`;
 
-	const hint = expanded ? "(ctrl+o to collapse)" : "(ctrl+o to expand)";
+	// Legacy helper kept for tests; prefer formatRichEditDiff in the live renderer.
+	const hint = expanded ? "(click / ctrl+o to collapse)" : "(click / ctrl+o to expand)";
 	const outLines: string[] = [
 		`${pad}  ${theme.fg("dim", `└ ${summaryText} ${hint}`)}`,
 	];
 
-	// Build colored diff lines from details.diff or fallback to edits array
 	const rawDiffLines: { type: "add" | "remove" | "context"; text: string }[] = [];
 
 	if (typeof diffText === "string" && diffText.trim().length > 0) {
@@ -232,7 +336,7 @@ export function formatEditDiffPreview(
 	const remaining = rawDiffLines.length - visible.length;
 	if (remaining > 0) {
 		outLines.push(
-			`${pad}      ${theme.fg("dim", `... (${remaining} more diff lines, ctrl+o to expand)`)}`,
+			`${pad}      ${theme.fg("dim", `... (${remaining} more diff lines, click / ctrl+o to expand)`)}`,
 		);
 	}
 
@@ -256,7 +360,7 @@ export function formatWritePreview(
 		: [];
 	const lineCount = allLines.length;
 
-	const hint = expanded ? "(ctrl+o to collapse)" : "(ctrl+o to expand)";
+	const hint = expanded ? "(click / ctrl+o to collapse)" : "(click / ctrl+o to expand)";
 	const summary =
 		lineCount > 0
 			? `Wrote ${lineCount} line${lineCount === 1 ? "" : "s"}`
@@ -278,7 +382,7 @@ export function formatWritePreview(
 		const remaining = lineCount - visible.length;
 		if (remaining > 0) {
 			outLines.push(
-				`${pad}      ${theme.fg("dim", `... (${remaining} more lines, ctrl+o to expand)`)}`,
+				`${pad}      ${theme.fg("dim", `... (${remaining} more lines, click / ctrl+o to expand)`)}`,
 			);
 		}
 	}
@@ -327,6 +431,24 @@ export function formatResultSummary(
 	if (toolName === "find") {
 		return `Found ${lines} path${lines === 1 ? "" : "s"}`;
 	}
+	if (toolName === "ask_user_question") {
+		const count = Array.isArray(result?.details?.answers)
+			? result.details.answers.length
+			: Array.isArray(args?.questions)
+				? args.questions.length
+				: 0;
+		return count > 0
+			? `Answered ${count} question${count === 1 ? "" : "s"}`
+			: "Answered";
+	}
+	if (toolName === "codemode") {
+		const calls = Array.isArray(result?.details?.calls) ? result.details.calls.length : 0;
+		if (calls > 0) return `Ran ${calls} tool call${calls === 1 ? "" : "s"}`;
+		if (durationMs !== undefined && durationMs > 0) {
+			return `Done in ${(durationMs / 1000).toFixed(1)}s`;
+		}
+		return "Done";
+	}
 	if (durationMs !== undefined && durationMs > 0) {
 		const sec = (durationMs / 1000).toFixed(1);
 		return `Done in ${sec}s`;
@@ -357,7 +479,7 @@ export function formatErrorLines(
 	}
 	if (!expanded && rawLines.length > 4) {
 		resultLines.push(
-			`${pad}  ${theme.fg("dim", `   ... (${rawLines.length - 4} more lines, ctrl+o to expand)`)}`,
+			`${pad}  ${theme.fg("dim", `   ... (${rawLines.length - 4} more lines, click / ctrl+o to expand)`)}`,
 		);
 	}
 	return resultLines.join("\n");
