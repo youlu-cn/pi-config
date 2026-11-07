@@ -1,4 +1,7 @@
 {
+  "toolActivity": {
+    "enabled": false
+  },
   "workAnimation": {
     "enabled": true,
     "style": "claude",

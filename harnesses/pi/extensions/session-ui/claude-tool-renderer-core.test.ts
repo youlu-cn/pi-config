@@ -55,7 +55,7 @@ test("formatToolHeader formats tool name and arguments with Claude style and sub
 		1,
 		"claude",
 	);
-	assert.ok(runningClaudeHeader.includes("[accent]✢[/accent]"));
+	assert.ok(runningClaudeHeader.includes("[accent]✣[/accent]"));
 	assert.ok(runningClaudeHeader.includes("<b>Bash</b>"));
 	assert.ok(runningClaudeHeader.includes("(esc to interrupt)"));
 
@@ -67,7 +67,7 @@ test("formatToolHeader formats tool name and arguments with Claude style and sub
 		mockTheme,
 		false,
 		false,
-		2,
+		1,
 		"gemini",
 	);
 	assert.ok(runningGeminiHeader.includes("[accent]✦[/accent]"));

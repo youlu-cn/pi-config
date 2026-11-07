@@ -15,10 +15,10 @@ export function isValidAnimationStyle(value: unknown): value is AnimationStyle {
 }
 
 const STYLE_FRAMES: Record<Exclude<AnimationStyle, "dots">, readonly string[]> = {
-	// Claude Code signature breathing starburst
-	claude: ["·", "✢", "✳", "∗", "✻", "✽", "✻", "∗", "✳", "✢"],
-	// Google Gemini four-point sparkle pulse
-	gemini: ["·", "✧", "✦", "❖", "✦", "✧"],
+	// Claude Code starburst (all from Unicode Dingbats block U+2722..U+273D for identical vertical baseline)
+	claude: ["✢", "✣", "✤", "✥", "✻", "✽", "✻", "✥", "✤", "✣"],
+	// Google Gemini sparkle pulse (all from Unicode Dingbats block U+2726..U+2756 for identical vertical baseline)
+	gemini: ["✧", "✦", "❖", "✦"],
 	// Smooth Braille circular spinner
 	braille: ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"],
 };
