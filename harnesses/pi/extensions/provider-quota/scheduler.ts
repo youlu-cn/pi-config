@@ -65,13 +65,13 @@ export class QuotaScheduler {
 	) {
 		this.pi = pi;
 		this.registry = registry;
-		this.cacheTtlMs = options.cacheTtlMs ?? 60_000; // 默认 60 秒缓存
+		this.cacheTtlMs = options.cacheTtlMs ?? 60_000; // Default 60-second TTL
 	}
 
 	/** Start background periodic polling */
 	start(ctx: ExtensionContext, intervalMs = 120_000): void {
 		this.stop();
-		// 初始立即刷新一次当前模型
+		// Initial immediate refresh for active model provider
 		this.refreshActiveProvider(ctx);
 
 		this.pollTimer = setInterval(() => {
@@ -101,7 +101,7 @@ export class QuotaScheduler {
 			return undefined;
 		}
 
-		// 检查缓存
+		// Check in-memory cache
 		const now = Date.now();
 		const cached = this.cache.get(adapter.id);
 		if (cached && cached.expiresAt > now) {
@@ -109,7 +109,7 @@ export class QuotaScheduler {
 			return cached.report;
 		}
 
-		// 超时控制 (8 秒)
+		// Timeout control (8 seconds)
 		const { signal, cleanup } = createTimeoutSignal(8000);
 		try {
 			const report = await adapter.fetchQuota(ctx, signal);
@@ -120,7 +120,7 @@ export class QuotaScheduler {
 			this.broadcast(report, ctx);
 			return report;
 		} catch (error) {
-			// 静默降级，不阻断宿主运行
+			// Silent fallback: do not interrupt agent execution
 			return undefined;
 		} finally {
 			cleanup();

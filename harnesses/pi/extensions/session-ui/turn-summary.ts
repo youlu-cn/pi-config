@@ -78,12 +78,12 @@ export function registerTurnSummary(
 		return new Text(theme.fg("dim", formatted), 0, 0);
 	};
 
-	// 注册当前 turn-summary 渲染器
+	// Register active turn-summary entry renderer
 	pi.registerEntryRenderer<TurnSummaryData>(TURN_SUMMARY_TYPE, (entry, _options, theme) =>
 		renderSummary(entry, theme),
 	);
 
-	// 向后兼容旧 session 中保存的 turn-duration 历史条目
+	// Backwards compatibility for legacy turn-duration entries stored in existing sessions
 	pi.registerEntryRenderer<TurnSummaryData>(
 		LEGACY_TURN_DURATION_TYPE,
 		(entry, _options, theme) => renderSummary(entry, theme),

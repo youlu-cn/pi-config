@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "scoutModel": "antigravity/gemini-3.8-flash",
+  "architectModel": "antigravity/gemini-4-argon",
+  "maxChangedFiles": 8,
+  "maxSummaryTokens": 2000,
+  "maxArchitectContextTokens": 5000,
+  "largeToolOutputCharThreshold": 1200
+}

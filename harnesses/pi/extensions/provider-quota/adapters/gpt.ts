@@ -34,7 +34,7 @@ export class GptAdapter implements ProviderAdapter {
 	): Promise<ProviderQuotaReport> {
 		let token: string | undefined;
 
-		// 1. 尝试从 Pi 运行时获取
+		// 1. Try resolving credentials from Pi runtime
 		if (ctx?.modelRegistry?.getProviderAuth) {
 			try {
 				const res = await ctx.modelRegistry.getProviderAuth("openai-codex");
@@ -45,7 +45,7 @@ export class GptAdapter implements ProviderAdapter {
 			} catch {}
 		}
 
-		// 2. 从 auth.json 读取
+		// 2. Fall back to persisted auth.json
 		if (!token) {
 			const auth = loadAuthStorage();
 			const entry = auth["openai-codex"] || auth.openai || {};
@@ -75,7 +75,7 @@ export class GptAdapter implements ProviderAdapter {
 		const rateLimit = data?.rate_limit || {};
 		const windows: QuotaWindow[] = [];
 
-		// Primary 窗口 (通常为 5 小时滚动窗口)
+		// Primary window (typically 5-hour rolling window)
 		if (rateLimit.primary_window) {
 			const pw = rateLimit.primary_window;
 			const usedPercent = typeof pw.used_percent === "number" ? pw.used_percent : 0;
@@ -100,7 +100,7 @@ export class GptAdapter implements ProviderAdapter {
 			);
 		}
 
-		// Secondary 窗口 (通常为周度限额)
+		// Secondary window (typically weekly quota)
 		if (rateLimit.secondary_window) {
 			const sw = rateLimit.secondary_window;
 			const usedPercent = typeof sw.used_percent === "number" ? sw.used_percent : 0;

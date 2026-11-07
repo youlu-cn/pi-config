@@ -13,6 +13,7 @@ models.json
 .env.*
 
 # Runtime, session & cache data
+.pi/
 sessions/
 cache/
 state/

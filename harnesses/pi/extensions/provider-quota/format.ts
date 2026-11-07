@@ -106,14 +106,14 @@ export function formatQuotaReport(
 		entry.windows.push(w);
 	}
 
-	// 组内窗口排序：更短的周期在前（如 5h 在 1w 之前）
+	// Intra-group sorting: shorter windows appear first (e.g. 5h before 1w)
 	for (const entry of groupsMap.values()) {
 		entry.windows.sort((a, b) => windowDurationMinutes(a) - windowDurationMinutes(b));
 	}
 
 	const groupsList = Array.from(groupsMap.values());
 
-	// 组间排序：当前模型匹配的组优先置顶
+	// Inter-group sorting: groups matching active model are prioritized at the top
 	const normModel = (activeModelId || "").toLowerCase();
 	groupsList.sort((a, b) => {
 		const aMatch = a.windows.some((w) =>
@@ -127,7 +127,7 @@ export function formatQuotaReport(
 		return a.heading.localeCompare(b.heading);
 	});
 
-	// 计算最大标签对齐宽度
+	// Compute maximum label width for alignment
 	let maxLabelWidth = 0;
 	for (const g of groupsList) {
 		for (const w of g.windows) {
@@ -139,7 +139,7 @@ export function formatQuotaReport(
 
 	const lines: string[] = [report.displayName];
 
-	// 输出各个分组与进度条
+	// Render groups and progress bars
 	for (const g of groupsList) {
 		lines.push("");
 		lines.push(`  ${g.heading}:`);
@@ -153,7 +153,7 @@ export function formatQuotaReport(
 		}
 	}
 
-	// 账号与套餐信息
+	// Account and subscription details
 	if (report.planName || report.accountEmail) {
 		lines.push("");
 		lines.push("  Account:");

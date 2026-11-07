@@ -16,7 +16,7 @@ const mockTheme = {
 test("formatToolHeader formats tool name and arguments with Claude style", () => {
 	const cwd = "/Users/boris/code/demo";
 
-	// 1. Read 工具成功
+	// 1. Read tool succeeded
 	const readHeader = formatToolHeader(
 		"read",
 		{ path: "/Users/boris/code/demo/server/test/models/User.test.js" },
@@ -29,7 +29,7 @@ test("formatToolHeader formats tool name and arguments with Claude style", () =>
 	assert.ok(readHeader.includes("<b>Read</b>"));
 	assert.ok(readHeader.includes("(server/test/models/User.test.js)"));
 
-	// 2. Bash 工具失败
+	// 2. Bash tool failed
 	const bashErrorHeader = formatToolHeader(
 		"bash",
 		{ command: "npm list nyc c8 istanbul" },
@@ -42,7 +42,7 @@ test("formatToolHeader formats tool name and arguments with Claude style", () =>
 	assert.ok(bashErrorHeader.includes("<b>Bash</b>"));
 	assert.ok(bashErrorHeader.includes("(npm list nyc c8 istanbul)"));
 
-	// 3. 进行中 Gemini 动画帧
+	// 3. In-progress Gemini animation frame
 	const runningHeader = formatToolHeader(
 		"bash",
 		{ command: "npm test" },
@@ -64,7 +64,7 @@ test("formatGeminiDots creates bouncing pulse dots", () => {
 	const f2 = formatGeminiDots(2, mockTheme, 3);
 	const f3 = formatGeminiDots(3, mockTheme, 3);
 
-	// 验证 3 点来回往返: 0->1->2->1
+	// Verify 3 dots bouncing back and forth: 0->1->2->1
 	assert.equal(f0, "[accent]●[/accent] [dim]·[/dim] [dim]·[/dim]");
 	assert.equal(f1, "[dim]·[/dim] [accent]●[/accent] [dim]·[/dim]");
 	assert.equal(f2, "[dim]·[/dim] [dim]·[/dim] [accent]●[/accent]");
@@ -72,7 +72,7 @@ test("formatGeminiDots creates bouncing pulse dots", () => {
 });
 
 test("formatResultSummary produces clean folded summaries for various tools", () => {
-	// 1. Read: 21 行
+	// 1. Read: 21 lines
 	const readSummary = formatResultSummary(
 		"read",
 		{ path: "foo.js" },
@@ -81,7 +81,7 @@ test("formatResultSummary produces clean folded summaries for various tools", ()
 	);
 	assert.equal(readSummary, "Read 21 lines");
 
-	// 2. Bash: 耗时
+	// 2. Bash: execution duration
 	const bashSummary = formatResultSummary(
 		"bash",
 		{ command: "ls" },
@@ -90,7 +90,7 @@ test("formatResultSummary produces clean folded summaries for various tools", ()
 	);
 	assert.equal(bashSummary, "Done in 0.4s");
 
-	// 3. Edit: 替换数量
+	// 3. Edit: replacements count
 	const editSummary = formatResultSummary(
 		"edit",
 		{ edits: [{}, {}, {}] },
@@ -99,7 +99,7 @@ test("formatResultSummary produces clean folded summaries for various tools", ()
 	);
 	assert.equal(editSummary, "3 replacements applied");
 
-	// 4. Grep: 匹配数量
+	// 4. Grep: matches count
 	const grepSummary = formatResultSummary(
 		"grep",
 		{ pattern: "test" },

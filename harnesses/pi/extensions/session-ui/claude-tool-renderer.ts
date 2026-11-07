@@ -95,7 +95,7 @@ export function registerClaudeToolRenderer(pi: ExtensionAPI): void {
 
 				const pad = " ".repeat(Math.max(0, context.outputPad ?? 1));
 
-				// 1. 错误状态：红点 + 红字输出
+				// 1. Error state: red bullet + red styled error text
 				if (context.isError) {
 					const errorText = getTextContent(result?.content) || "Tool execution failed";
 					const component =
@@ -106,7 +106,7 @@ export function registerClaudeToolRenderer(pi: ExtensionAPI): void {
 					return component;
 				}
 
-				// 2. 成功且默认折叠状态：树形摘要行
+				// 2. Success state, collapsed by default: render tree summary line
 				if (!options.expanded) {
 					const summary = formatResultSummary(
 						toolName,
@@ -123,7 +123,7 @@ export function registerClaudeToolRenderer(pi: ExtensionAPI): void {
 					return component;
 				}
 
-				// 3. 成功且用户展开状态：保留折叠提示，并展示详细内容
+				// 3. Success state, expanded by user: keep collapse hint and render details
 				const container =
 					context.lastComponent instanceof Container
 						? context.lastComponent
@@ -131,7 +131,7 @@ export function registerClaudeToolRenderer(pi: ExtensionAPI): void {
 				container.clear();
 				container.addChild(new Text(`${pad}  ${theme.fg("dim", "└ (ctrl+o to collapse)")}`, 0, 0));
 
-				// 若原生 renderer 提供了带语法高亮的富组件，优先展示
+				// If native renderer provides rich component with syntax highlighting, prefer it
 				if (defaultRenderers?.renderResult) {
 					try {
 						const child = defaultRenderers.renderResult(result, options, theme, context);
@@ -142,7 +142,7 @@ export function registerClaudeToolRenderer(pi: ExtensionAPI): void {
 					} catch {}
 				}
 
-				// 通用展开内容输出
+				// Generic expanded text output
 				const rawOutput = getTextContent(result?.content);
 				if (rawOutput) {
 					const lines = rawOutput.split("\n");
@@ -163,7 +163,7 @@ export function registerClaudeToolRenderer(pi: ExtensionAPI): void {
 		};
 	});
 
-	// 生命周期事件触发时兜底清理任何活跃的动画定时器
+	// Safety cleanup: clear any lingering animation timers on lifecycle boundaries
 	const cleanup = () => cleanupAllToolAnimationTimers();
 	pi.on("turn_end", cleanup);
 	pi.on("agent_settled", cleanup);

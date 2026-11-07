@@ -9,7 +9,7 @@ export class AdapterRegistry {
 	private readonly adapters: Map<string, ProviderAdapter> = new Map();
 
 	constructor() {
-		// 注册默认内置 Adapters
+		// Register built-in adapters
 		this.register(new AntigravityAdapter());
 		this.register(new GptAdapter());
 		this.register(new ClaudeAdapter());

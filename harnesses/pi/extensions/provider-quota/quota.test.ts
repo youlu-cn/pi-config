@@ -59,22 +59,22 @@ test("Antigravity returns valid windows and matches model accurately", async () 
 	assert.equal(report.providerId, "antigravity");
 	assert.ok(report.windows.length >= 3);
 
-	// 1. gemini-3.8-flash 应精确匹配到 Gemini Models
+	// 1. gemini-3.8-flash matches Gemini Models
 	const matchFlash = matchQuotaWindow(report.windows, "gemini-3.8-flash");
 	assert.equal(matchFlash?.groupId, "gemini-models");
 	assert.equal(matchFlash?.label, "Gemini");
 
-	// 2. gemini-4-argon 应精确匹配到 Argon（而不是更宽泛的 Gemini）
+	// 2. gemini-4-argon matches Argon specifically
 	const matchArgon = matchQuotaWindow(report.windows, "gemini-4-argon");
 	assert.equal(matchArgon?.groupId, "gemini-argon");
 	assert.equal(matchArgon?.label, "Argon");
 
-	// 3. claude-3-7-sonnet 应精确匹配到 Claude/GPT
+	// 3. claude-3-7-sonnet matches Claude/GPT models
 	const matchClaude = matchQuotaWindow(report.windows, "claude-3-7-sonnet");
 	assert.equal(matchClaude?.groupId, "claude-and-gpt-models");
 	assert.ok(matchClaude?.label.startsWith("Claude"));
 
-	// 4. matchQuotaWindowsForModel 返回匹配 Group 的所有窗口
+	// 4. matchQuotaWindowsForModel returns all windows for matching group
 	const claudeWindows = matchQuotaWindowsForModel(report.windows, "claude-3-7-sonnet");
 	assert.ok(claudeWindows.length >= 1);
 	assert.ok(claudeWindows.every((w) => w.groupId === "claude-and-gpt-models"));
@@ -114,13 +114,13 @@ test("formatQuotaReport renders grouped sections and progress bars", () => {
 		],
 	}, "gemini-3.8-flash");
 
-	// 验证包含分组标题
+	// Verify group headers
 	assert.ok(output.includes("Gemini Models:"));
 	assert.ok(output.includes("Claude and GPT models:"));
-	// 验证包含进度条字符
+	// Verify progress bar blocks
 	assert.ok(output.includes("█"));
 	assert.ok(output.includes("░"));
-	// 验证包含账号与套餐信息
+	// Verify account and plan details
 	assert.ok(output.includes("Account:"));
 	assert.ok(output.includes("Google AI Pro"));
 	assert.ok(output.includes("tester@example.com"));

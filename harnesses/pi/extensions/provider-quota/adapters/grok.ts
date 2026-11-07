@@ -20,7 +20,7 @@ export class GrokAdapter implements ProviderAdapter {
 	): Promise<ProviderQuotaReport> {
 		let token: string | undefined;
 
-		// 1. 尝试从 Pi 运行时获取
+		// 1. Try resolving credentials from Pi runtime
 		if (ctx?.modelRegistry?.getProviderAuth) {
 			try {
 				const res = await ctx.modelRegistry.getProviderAuth("xai");
@@ -31,7 +31,7 @@ export class GrokAdapter implements ProviderAdapter {
 			} catch {}
 		}
 
-		// 2. 从 auth.json 读取
+		// 2. Fall back to persisted auth.json
 		if (!token) {
 			const auth = loadAuthStorage();
 			const entry = auth.xai || auth.grok || {};
@@ -48,7 +48,7 @@ export class GrokAdapter implements ProviderAdapter {
 			"x-grok-client-version": "0.1.0",
 		};
 
-		// 获取 userId
+		// Fetch userId
 		const userRes = await fetch("https://cli-chat-proxy.grok.com/v1/user", {
 			headers,
 			signal,
@@ -64,7 +64,7 @@ export class GrokAdapter implements ProviderAdapter {
 		const userData = (await userRes.json()) as any;
 		const userId = userData?.userId;
 
-		// 请求计费配额数据
+		// Request billing quota data
 		const billingHeaders = {
 			...headers,
 			...(userId ? { "x-userid": userId } : {}),
@@ -83,12 +83,12 @@ export class GrokAdapter implements ProviderAdapter {
 		const now = Date.now();
 		const windows: QuotaWindow[] = [];
 
-		// 解析配额信用点
+		// Parse quota credits
 		const creditsConfig =
 			billingData?.billingConfig || billingData?.credits || billingData;
 
 		if (creditsConfig) {
-			// 周度或滚动窗口
+			// Weekly or rolling credit window
 			const usedCredits = typeof creditsConfig.usedCredits === "number" ? creditsConfig.usedCredits : 0;
 			const totalCredits = typeof creditsConfig.totalCredits === "number" ? creditsConfig.totalCredits : 0;
 

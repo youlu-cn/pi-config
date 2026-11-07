@@ -38,7 +38,7 @@ export interface AntigravityCredential {
 export async function resolveAntigravityToken(
 	ctx?: ExtensionContext,
 ): Promise<AntigravityCredential | undefined> {
-	// 1. 优先尝试从 Pi 运行时 ModelRegistry 获取已登录凭据（Pi 自动管理 token 有效期）
+	// 1. Try resolving credentials from Pi runtime ModelRegistry first
 	if (ctx?.modelRegistry?.getProviderAuth) {
 		try {
 			const res = await ctx.modelRegistry.getProviderAuth("antigravity");
@@ -46,7 +46,7 @@ export async function resolveAntigravityToken(
 				let token: string | undefined;
 				let projectId: string | undefined;
 
-				// 检查 apiKey JSON
+				// Check apiKey JSON
 				if (typeof res.auth.apiKey === "string") {
 					try {
 						const parsed = JSON.parse(res.auth.apiKey);
@@ -57,7 +57,7 @@ export async function resolveAntigravityToken(
 					}
 				}
 
-				// 检查 headers Authorization
+				// Check headers Authorization
 				if (!token && res.auth.headers) {
 					const authHeader =
 						res.auth.headers.Authorization || res.auth.headers.authorization;
@@ -79,7 +79,7 @@ export async function resolveAntigravityToken(
 		} catch {}
 	}
 
-	// 2. 从 Pi 登录成功后持久化的 auth.json 读取
+	// 2. Read from persisted auth.json if runtime resolution fails
 	const auth = loadAuthStorage();
 	const entry = auth.antigravity || auth["google-antigravity"];
 	if (!entry) {

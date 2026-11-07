@@ -26,14 +26,14 @@ export class ClaudeAdapter implements ProviderAdapter {
 			ctx.model?.provider === "claude-bridge" ||
 			Boolean(loadAuthStorage()["claude-bridge"]);
 
-		// Anthropic 官方 API Key 是纯按量计费，官方完全不提供可轮询查询的订阅周期限额端点
+		// Anthropic official API key is pay-as-you-go; no polling subscription quota endpoint is provided.
 		if (!isBridge) {
 			throw new Error(
 				"Anthropic API key is pay-as-you-go and does not have a subscription quota endpoint. Quota tracking is only available when using Claude Code bridge.",
 			);
 		}
 
-		// Claude Code Bridge 模式：通过 Claude Code 获取配额
+		// Claude Code Bridge mode: estimate or resolve via Claude Code
 		const now = Date.now();
 		const reset5h = now + 5 * 3600 * 1000;
 

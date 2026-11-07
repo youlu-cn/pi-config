@@ -17,7 +17,7 @@ export default function providerQuota(pi: ExtensionAPI): void {
 	const registry = new AdapterRegistry();
 	const scheduler = new QuotaScheduler(pi, registry);
 
-	// 注册 /quota 查询命令
+	// Register /quota command
 	pi.registerCommand("quota", {
 		description: "Display subscription quotas and reset countdowns for configured AI providers",
 		async handler(_args, ctx) {
@@ -41,7 +41,7 @@ export default function providerQuota(pi: ExtensionAPI): void {
 		},
 	});
 
-	// 生命周期监听
+	// Lifecycle listeners
 	pi.on("session_start", (_event, ctx) => {
 		if (ctx.hasUI && ctx.mode === "tui") {
 			scheduler.start(ctx);
