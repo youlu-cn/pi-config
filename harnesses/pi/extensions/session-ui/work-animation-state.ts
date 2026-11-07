@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { isValidAnimationStyle, type AnimationStyle } from "./work-animation-core.ts";
 
 type JsonObject = Record<string, unknown>;
 
@@ -27,6 +28,12 @@ function readState(path: string): JsonObject {
 		) {
 			throw new Error("workAnimation.enabled must be a boolean");
 		}
+		if (
+			raw.workAnimation.style !== undefined &&
+			!isValidAnimationStyle(raw.workAnimation.style)
+		) {
+			throw new Error("workAnimation.style must be claude, gemini, braille, or dots");
+		}
 	}
 	return raw;
 }
@@ -34,11 +41,14 @@ function readState(path: string): JsonObject {
 export function loadWorkAnimationState(
 	path: string,
 	fallback: boolean,
-): { enabled: boolean; warning?: string } {
+	fallbackStyle: AnimationStyle = "claude",
+): { enabled: boolean; style?: AnimationStyle; warning?: string } {
 	try {
 		const raw = readState(path);
 		const animation = raw.workAnimation as JsonObject | undefined;
-		return { enabled: (animation?.enabled as boolean | undefined) ?? fallback };
+		const enabled = (animation?.enabled as boolean | undefined) ?? fallback;
+		const style = animation?.style as AnimationStyle | undefined;
+		return style ? { enabled, style } : { enabled };
 	} catch (error) {
 		return {
 			enabled: fallback,
@@ -47,12 +57,21 @@ export function loadWorkAnimationState(
 	}
 }
 
-export function saveWorkAnimationState(path: string, enabled: boolean): void {
+export function saveWorkAnimationState(
+	path: string,
+	enabled: boolean,
+	style?: AnimationStyle,
+): void {
 	// Re-read before writing so unrelated state is preserved.
 	const raw = readState(path);
+	const existingAnim = (raw.workAnimation as JsonObject | undefined) ?? {};
+	const nextAnim: JsonObject = { ...existingAnim, enabled };
+	if (style !== undefined) {
+		nextAnim.style = style;
+	}
 	const next = {
 		...raw,
-		workAnimation: { ...(raw.workAnimation as JsonObject | undefined), enabled },
+		workAnimation: nextAnim,
 	};
 	mkdirSync(dirname(path), { recursive: true });
 	const temporaryPath = `${path}.tmp-${randomUUID()}`;

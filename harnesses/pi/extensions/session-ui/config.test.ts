@@ -137,6 +137,7 @@ test("loads the integrated workAnimation config", () => {
 	const loaded = withConfig({
 		workAnimation: {
 			enabled: false,
+			style: "gemini",
 			intervalMs: 500,
 			placement: "belowEditor",
 		},
@@ -144,6 +145,7 @@ test("loads the integrated workAnimation config", () => {
 
 	assert.deepEqual(loaded.config.workAnimation, {
 		enabled: false,
+		style: "gemini",
 		intervalMs: 500,
 		placement: "belowEditor",
 	});
@@ -154,6 +156,7 @@ test("falls back and warns for invalid workAnimation values", () => {
 	const loaded = withConfig({
 		workAnimation: {
 			enabled: "yes",
+			style: "unknown",
 			intervalMs: 99,
 			placement: "besideEditor",
 		},
@@ -166,6 +169,7 @@ test("falls back and warns for invalid workAnimation values", () => {
 	});
 	assert.deepEqual(loaded.warnings, [
 		"workAnimation.placement must be aboveEditor or belowEditor",
+		"workAnimation.style must be one of: claude, gemini, braille, dots",
 		"workAnimation.enabled must be a boolean",
 		"workAnimation.intervalMs must be an integer between 100 and 500",
 	]);

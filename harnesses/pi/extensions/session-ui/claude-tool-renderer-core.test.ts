@@ -13,10 +13,10 @@ const mockTheme = {
 	bold: (text: string) => `<b>${text}</b>`,
 } as any;
 
-test("formatToolHeader formats tool name and arguments with Claude style", () => {
+test("formatToolHeader formats tool name and arguments with Claude style and subtle bullet", () => {
 	const cwd = "/Users/boris/code/demo";
 
-	// 1. Read tool succeeded
+	// 1. Read tool succeeded (uses subtle bullet • instead of large ●)
 	const readHeader = formatToolHeader(
 		"read",
 		{ path: "/Users/boris/code/demo/server/test/models/User.test.js" },
@@ -25,7 +25,7 @@ test("formatToolHeader formats tool name and arguments with Claude style", () =>
 		true,
 		false,
 	);
-	assert.ok(readHeader.includes("[success]● ["));
+	assert.ok(readHeader.includes("[success]• ["));
 	assert.ok(readHeader.includes("<b>Read</b>"));
 	assert.ok(readHeader.includes("(server/test/models/User.test.js)"));
 
@@ -38,12 +38,12 @@ test("formatToolHeader formats tool name and arguments with Claude style", () =>
 		true,
 		true,
 	);
-	assert.ok(bashErrorHeader.includes("[error]● ["));
+	assert.ok(bashErrorHeader.includes("[error]• ["));
 	assert.ok(bashErrorHeader.includes("<b>Bash</b>"));
 	assert.ok(bashErrorHeader.includes("(npm list nyc c8 istanbul)"));
 
-	// 3. In-progress Gemini animation frame
-	const runningHeader = formatToolHeader(
+	// 3. In-progress Claude starburst animation frame (default style = "claude")
+	const runningClaudeHeader = formatToolHeader(
 		"bash",
 		{ command: "npm test" },
 		cwd,
@@ -51,24 +51,37 @@ test("formatToolHeader formats tool name and arguments with Claude style", () =>
 		false,
 		false,
 		1,
+		"claude",
 	);
-	assert.ok(runningHeader.includes("[accent]●[/accent]"));
-	assert.ok(runningHeader.includes("[dim]·[/dim]"));
-	assert.ok(runningHeader.includes("<b>Bash</b>"));
-	assert.ok(runningHeader.includes("(esc to interrupt)"));
+	assert.ok(runningClaudeHeader.includes("[accent]✢[/accent]"));
+	assert.ok(runningClaudeHeader.includes("<b>Bash</b>"));
+	assert.ok(runningClaudeHeader.includes("(esc to interrupt)"));
+
+	// 4. In-progress Gemini sparkle animation frame (style = "gemini")
+	const runningGeminiHeader = formatToolHeader(
+		"scout",
+		{ reason: "init" },
+		cwd,
+		mockTheme,
+		false,
+		false,
+		2,
+		"gemini",
+	);
+	assert.ok(runningGeminiHeader.includes("[accent]✦[/accent]"));
 });
 
-test("formatGeminiDots creates bouncing pulse dots", () => {
+test("formatGeminiDots creates bouncing pulse dots with subtle bullets", () => {
 	const f0 = formatGeminiDots(0, mockTheme, 3);
 	const f1 = formatGeminiDots(1, mockTheme, 3);
 	const f2 = formatGeminiDots(2, mockTheme, 3);
 	const f3 = formatGeminiDots(3, mockTheme, 3);
 
 	// Verify 3 dots bouncing back and forth: 0->1->2->1
-	assert.equal(f0, "[accent]●[/accent] [dim]·[/dim] [dim]·[/dim]");
-	assert.equal(f1, "[dim]·[/dim] [accent]●[/accent] [dim]·[/dim]");
-	assert.equal(f2, "[dim]·[/dim] [dim]·[/dim] [accent]●[/accent]");
-	assert.equal(f3, "[dim]·[/dim] [accent]●[/accent] [dim]·[/dim]");
+	assert.equal(f0, "[accent]•[/accent] [dim]·[/dim] [dim]·[/dim]");
+	assert.equal(f1, "[dim]·[/dim] [accent]•[/accent] [dim]·[/dim]");
+	assert.equal(f2, "[dim]·[/dim] [dim]·[/dim] [accent]•[/accent]");
+	assert.equal(f3, "[dim]·[/dim] [accent]•[/accent] [dim]·[/dim]");
 });
 
 test("formatResultSummary produces clean folded summaries for various tools", () => {

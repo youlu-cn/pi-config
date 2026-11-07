@@ -41,7 +41,7 @@ export default function sessionUi(pi: ExtensionAPI): void {
 	) {
 		registerUiMeta(pi, config.uiMeta, titleController);
 	}
-	registerWorkAnimation(
+	const workAnimController = registerWorkAnimation(
 		pi,
 		config.workAnimation,
 		join(getAgentDir(), "state", "session-ui.json"),
@@ -49,7 +49,11 @@ export default function sessionUi(pi: ExtensionAPI): void {
 	);
 	if (config.compactPaste.enabled) registerCompactPasteEditor(pi);
 	if (config.claudeToolStyle?.enabled ?? true) {
-		registerClaudeToolRenderer(pi);
+		registerClaudeToolRenderer(pi, {
+			getStyle: () => config.claudeToolStyle.style ?? workAnimController.getStyle(),
+			getIntervalMs: () =>
+				config.claudeToolStyle.intervalMs ?? workAnimController.getIntervalMs(),
+		});
 	}
 	if (config.toolActivity.enabled) {
 		registerToolActivity(pi, config.toolActivity);

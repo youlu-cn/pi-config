@@ -1,19 +1,19 @@
-import type { ExtensionAPI, Theme } from "@earendil-works/pi-coding-agent";
-import type {
-	AgentToolResult,
-	ToolRenderContext,
-	ToolRenderResultOptions,
-} from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ToolRenderContext } from "@earendil-works/pi-coding-agent";
 import { Container, Text } from "@earendil-works/pi-tui";
 import {
 	formatErrorLines,
 	formatResultSummary,
 	formatToolHeader,
 	getTextContent,
-	SPINNER_FRAMES,
 } from "./claude-tool-renderer-core.ts";
+import type { AnimationStyle } from "./work-animation-core.ts";
 
 const activeAnimTimers = new Set<NodeJS.Timeout>();
+
+export interface ClaudeToolRendererOptions {
+	getStyle?: () => AnimationStyle;
+	getIntervalMs?: () => number;
+}
 
 export function cleanupAllToolAnimationTimers(): void {
 	for (const timer of activeAnimTimers) {
@@ -28,13 +28,17 @@ interface ToolAnimState {
 	hasResult?: boolean;
 }
 
-function getSpinnerStep(state: ToolAnimState, context: ToolRenderContext): number {
+function getSpinnerStep(
+	state: ToolAnimState,
+	context: ToolRenderContext,
+	intervalMs = 180,
+): number {
 	if (!state.animTimer) {
 		state.frameIndex = 0;
 		const timer = setInterval(() => {
 			state.frameIndex = (state.frameIndex ?? 0) + 1;
 			context.invalidate();
-		}, 120);
+		}, intervalMs);
 		state.animTimer = timer;
 		activeAnimTimers.add(timer);
 	}
@@ -49,7 +53,11 @@ function stopSpinner(state: ToolAnimState): void {
 	}
 }
 
-export function registerClaudeToolRenderer(pi: ExtensionAPI): void {
+export function registerClaudeToolRenderer(
+	pi: ExtensionAPI,
+	rendererOptions: ClaudeToolRendererOptions = {},
+): void {
+	if (typeof pi.registerToolRenderer !== "function") return;
 	pi.registerToolRenderer((toolName, next) => {
 		const defaultRenderers = next();
 
@@ -62,9 +70,12 @@ export function registerClaudeToolRenderer(pi: ExtensionAPI): void {
 					(context.durationMs !== undefined || state.hasResult === true);
 				const isError = context.isError === true;
 
+				const currentStyle = rendererOptions.getStyle?.() ?? "claude";
+				const currentIntervalMs = rendererOptions.getIntervalMs?.() ?? 180;
+
 				let animStep = 0;
 				if (!isDone) {
-					animStep = getSpinnerStep(state, context);
+					animStep = getSpinnerStep(state, context, currentIntervalMs);
 				} else {
 					stopSpinner(state);
 				}
@@ -77,6 +88,7 @@ export function registerClaudeToolRenderer(pi: ExtensionAPI): void {
 					isDone,
 					isError,
 					animStep,
+					currentStyle,
 				);
 
 				const pad = " ".repeat(Math.max(0, context.outputPad ?? 1));

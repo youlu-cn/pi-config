@@ -28,7 +28,7 @@ export function registerSessionTitleController(
 		if (!ctx?.hasUI || ctx.mode !== "tui") return;
 		const directory = basename(ctx.cwd || process.cwd()) || "pi";
 		const task = taskTitle || pi.getSessionName()?.trim() || directory;
-		const prefix = animationFrame ? `${animationFrame} π` : working ? "● π" : "π";
+		const prefix = animationFrame ? `${animationFrame} π` : working ? "• π" : "π";
 		ctx.ui.setTitle(
 			task === directory
 				? `${prefix} · ${directory}`

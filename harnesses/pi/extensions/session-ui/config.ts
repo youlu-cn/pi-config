@@ -1,6 +1,11 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { StatuslineOverflow } from "./statusline-core.ts";
+import {
+	isValidAnimationStyle,
+	VALID_ANIMATION_STYLES,
+	type AnimationStyle,
+} from "./work-animation-core.ts";
 
 export type WidgetPlacement = "aboveEditor" | "belowEditor";
 
@@ -12,6 +17,7 @@ export interface SessionUiConfig {
 	};
 	workAnimation: {
 		enabled: boolean;
+		style?: AnimationStyle;
 		intervalMs: number;
 		placement: WidgetPlacement;
 	};
@@ -20,6 +26,8 @@ export interface SessionUiConfig {
 	};
 	claudeToolStyle: {
 		enabled: boolean;
+		style?: AnimationStyle;
+		intervalMs?: number;
 	};
 	statusline: {
 		enabled: boolean;
@@ -240,6 +248,40 @@ function parseConfig(raw: unknown, warnings: string[]): SessionUiConfig {
 		}
 	}
 
+	let animationStyle: AnimationStyle | undefined;
+	if (workAnimation.style !== undefined) {
+		if (isValidAnimationStyle(workAnimation.style)) {
+			animationStyle = workAnimation.style;
+		} else {
+			warnings.push(
+				`workAnimation.style must be one of: ${VALID_ANIMATION_STYLES.join(", ")}`,
+			);
+		}
+	}
+
+	let toolAnimationStyle: AnimationStyle | undefined;
+	if (claudeToolStyle.style !== undefined) {
+		if (isValidAnimationStyle(claudeToolStyle.style)) {
+			toolAnimationStyle = claudeToolStyle.style;
+		} else {
+			warnings.push(
+				`claudeToolStyle.style must be one of: ${VALID_ANIMATION_STYLES.join(", ")}`,
+			);
+		}
+	}
+
+	let toolIntervalMs: number | undefined;
+	if (claudeToolStyle.intervalMs !== undefined) {
+		toolIntervalMs = boundedInteger(
+			claudeToolStyle.intervalMs,
+			180,
+			"claudeToolStyle.intervalMs",
+			100,
+			500,
+			warnings,
+		);
+	}
+
 	let overflow = DEFAULT_SESSION_UI_CONFIG.statusline.overflow;
 	if (statusline.overflow !== undefined) {
 		if (
@@ -289,6 +331,7 @@ function parseConfig(raw: unknown, warnings: string[]): SessionUiConfig {
 				"workAnimation.enabled",
 				warnings,
 			),
+			...(animationStyle !== undefined ? { style: animationStyle } : {}),
 			intervalMs: boundedInteger(
 				workAnimation.intervalMs,
 				DEFAULT_SESSION_UI_CONFIG.workAnimation.intervalMs,
@@ -314,6 +357,8 @@ function parseConfig(raw: unknown, warnings: string[]): SessionUiConfig {
 				"claudeToolStyle.enabled",
 				warnings,
 			),
+			...(toolAnimationStyle !== undefined ? { style: toolAnimationStyle } : {}),
+			...(toolIntervalMs !== undefined ? { intervalMs: toolIntervalMs } : {}),
 		},
 		statusline: {
 			enabled: booleanValue(

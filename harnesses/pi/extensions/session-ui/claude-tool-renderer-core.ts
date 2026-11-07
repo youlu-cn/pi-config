@@ -1,28 +1,18 @@
 import { isAbsolute, relative } from "node:path";
 import type { Theme } from "@earendil-works/pi-coding-agent";
+import {
+	renderGeminiDots,
+	renderSpinnerFrame,
+	type AnimationStyle,
+} from "./work-animation-core.ts";
 
 export function formatGeminiDots(
 	step: number,
 	theme: Theme,
 	total = 3,
 ): string {
-	const count = Math.max(2, total);
-	const cycle = (count - 1) * 2;
-	const pos = Math.abs(step) % cycle;
-	const activeIndex = pos < count ? pos : cycle - pos;
-
-	const parts: string[] = [];
-	for (let i = 0; i < count; i++) {
-		if (i === activeIndex) {
-			parts.push(theme.fg("accent", "●"));
-		} else {
-			parts.push(theme.fg("dim", "·"));
-		}
-	}
-	return parts.join(" ");
+	return renderGeminiDots(step, theme, total);
 }
-
-export const SPINNER_FRAMES = ["0", "1", "2", "1"];
 
 function capitalize(str: string): string {
 	if (!str) return "";
@@ -48,14 +38,15 @@ export function formatToolHeader(
 	isDone: boolean,
 	isError: boolean,
 	animStep = 0,
+	style: AnimationStyle = "claude",
 ): string {
 	let icon: string;
 	if (!isDone) {
-		icon = `${formatGeminiDots(animStep, theme, 3)} `;
+		icon = `${renderSpinnerFrame(animStep, theme, style, 3)} `;
 	} else if (isError) {
-		icon = theme.fg("error", "● ");
+		icon = theme.fg("error", "• ");
 	} else {
-		icon = theme.fg("success", "● ");
+		icon = theme.fg("success", "• ");
 	}
 
 	let displayName = capitalize(toolName);

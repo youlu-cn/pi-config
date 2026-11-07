@@ -1,4 +1,10 @@
 {
+  "workAnimation": {
+    "enabled": true,
+    "style": "claude",
+    "intervalMs": 180,
+    "placement": "aboveEditor"
+  },
   "statusline": {
     "segments": [
       "model",

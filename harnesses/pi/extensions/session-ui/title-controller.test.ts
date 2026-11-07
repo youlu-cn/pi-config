@@ -52,13 +52,13 @@ test("title controller composes task, working state, and animation frames", () =
 
 	controller.setWorking(true);
 	assert.equal(controller.isWorking(), true);
-	assert.equal(harness.titles.at(-1), "● π · Current task · project");
+	assert.equal(harness.titles.at(-1), "• π · Current task · project");
 
 	controller.setAnimationFrame("⠋");
 	assert.equal(harness.titles.at(-1), "⠋ π · Current task · project");
 
 	controller.setAnimationFrame(undefined);
-	assert.equal(harness.titles.at(-1), "● π · Current task · project");
+	assert.equal(harness.titles.at(-1), "• π · Current task · project");
 });
 
 test("title controller falls back to session name and clears task on shutdown", () => {

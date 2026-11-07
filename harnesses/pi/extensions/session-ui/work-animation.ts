@@ -5,7 +5,13 @@ import type {
 import { truncateToWidth } from "@earendil-works/pi-tui";
 import type { SessionUiConfig } from "./config.ts";
 import type { SessionTitleController } from "./title-controller.ts";
-import { phaseForTool, renderGeminiDots } from "./work-animation-core.ts";
+import {
+	getTitleSpinnerFrame,
+	isValidAnimationStyle,
+	phaseForTool,
+	renderSpinnerFrame,
+	type AnimationStyle,
+} from "./work-animation-core.ts";
 import {
 	loadWorkAnimationState,
 	saveWorkAnimationState,
@@ -18,15 +24,20 @@ type ActiveTool = {
 };
 
 const WIDGET_ID = "session-ui:work-animation";
-const TITLE_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+export interface WorkAnimationController {
+	getStyle(): AnimationStyle;
+	getIntervalMs(): number;
+}
 
 export function registerWorkAnimation(
 	pi: ExtensionAPI,
 	initialConfig: WorkAnimationConfig,
 	statePath: string,
 	titleController: SessionTitleController,
-): void {
+): WorkAnimationController {
 	let config = { ...initialConfig };
+	let activeStyle: AnimationStyle = initialConfig.style ?? "claude";
 	let lastStateWarning: string | undefined;
 	let requestRender: (() => void) | undefined;
 	let timer: ReturnType<typeof setInterval> | undefined;
@@ -66,7 +77,7 @@ export function registerWorkAnimation(
 		stopTimer();
 		timer = setInterval(() => {
 			frameIndex++;
-			const frame = TITLE_FRAMES[frameIndex % TITLE_FRAMES.length]!;
+			const frame = getTitleSpinnerFrame(frameIndex, activeStyle);
 			titleController.setAnimationFrame(frame);
 			renderOnce();
 		}, config.intervalMs);
@@ -78,7 +89,7 @@ export function registerWorkAnimation(
 		frameIndex = 0;
 		phase = nextPhase;
 		ctx.ui.setWorkingVisible(false);
-		titleController.setAnimationFrame(TITLE_FRAMES[0]);
+		titleController.setAnimationFrame(getTitleSpinnerFrame(0, activeStyle));
 		startTimer();
 		renderOnce();
 	};
@@ -95,8 +106,17 @@ export function registerWorkAnimation(
 		frameIndex = 0;
 		phase = "Working...";
 		activeTools.clear();
-		const saved = loadWorkAnimationState(statePath, initialConfig.enabled);
+		const saved = loadWorkAnimationState(
+			statePath,
+			initialConfig.enabled,
+			initialConfig.style ?? "claude",
+		);
 		config.enabled = saved.enabled;
+		if (saved.style) {
+			activeStyle = saved.style;
+		} else {
+			activeStyle = initialConfig.style ?? "claude";
+		}
 		if (ctx.hasUI) {
 			if (saved.warning && saved.warning !== lastStateWarning) {
 				ctx.ui.notify(saved.warning, "warning");
@@ -112,8 +132,8 @@ export function registerWorkAnimation(
 				return {
 					render(width: number): string[] {
 						if (!running || !config.enabled) return [];
-						const dots = renderGeminiDots(frameIndex, theme, 4);
-						const line = `${dots}  ${theme.fg("muted", phase)}`;
+						const spinner = renderSpinnerFrame(frameIndex, theme, activeStyle, 4);
+						const line = `${spinner}  ${theme.fg("muted", phase)}`;
 						return [truncateToWidth(line, Math.max(1, width), "")];
 					},
 					invalidate() {},
@@ -163,20 +183,43 @@ export function registerWorkAnimation(
 	});
 
 	pi.registerCommand("work-animation", {
-		description: "Configure the session-ui work animation: on, off, status",
+		description: "Configure the session-ui work animation: on, off, status, claude, gemini, braille, dots",
 		handler: async (args, ctx) => {
 			const action = args.trim().toLowerCase() || "status";
 
 			if (action === "status") {
 				ctx.ui.notify(
-					`Work animation: ${config.enabled ? "on" : "off"} · ${config.intervalMs}ms · ${config.placement}`,
+					`Work animation: ${config.enabled ? "on" : "off"} · ${activeStyle} · ${config.intervalMs}ms · ${config.placement}`,
 					"info",
 				);
 				return;
 			}
 
+			if (isValidAnimationStyle(action)) {
+				activeStyle = action;
+				config = { ...config, enabled: true, style: action };
+				applyEnabledState(ctx);
+				if (titleController.isWorking()) {
+					startAnimation(ctx, phase);
+				}
+				try {
+					saveWorkAnimationState(statePath, config.enabled, activeStyle);
+				} catch (error) {
+					ctx.ui.notify(
+						`Work animation style set to ${activeStyle} for this session only; could not save ${statePath}: ${error instanceof Error ? error.message : String(error)}`,
+						"warning",
+					);
+					return;
+				}
+				ctx.ui.notify(`Work animation style set to ${activeStyle}`, "info");
+				return;
+			}
+
 			if (action !== "on" && action !== "off") {
-				ctx.ui.notify("Usage: /work-animation [on|off|status]", "error");
+				ctx.ui.notify(
+					"Usage: /work-animation [on|off|status|claude|gemini|braille|dots]",
+					"error",
+				);
 				return;
 			}
 
@@ -196,9 +239,14 @@ export function registerWorkAnimation(
 				return;
 			}
 			ctx.ui.notify(
-				`Work animation ${config.enabled ? "enabled" : "disabled"}`,
+				`Work animation ${config.enabled ? "enabled" : "disabled"} (${activeStyle})`,
 				"info",
 			);
 		},
 	});
+
+	return {
+		getStyle: () => activeStyle,
+		getIntervalMs: () => config.intervalMs,
+	};
 }
