@@ -88,7 +88,7 @@ export async function runArchitectTask(
 			tools: "read,grep,find",
 			cwd: ctx.cwd,
 			prompt,
-			timeoutMs: 180000,
+			timeoutMs: 240000,
 			signal,
 		});
 

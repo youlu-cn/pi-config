@@ -163,12 +163,29 @@ export function execCommandAsync(
 }
 
 /**
+ * Resolve provider extension package path when running with --no-extensions.
+ */
+export function resolveProviderExtension(provider: string): string | null {
+	if (provider === "antigravity") {
+		const candidate = join(homedir(), ".pi", "agent", "npm", "node_modules", "pi-antigravity");
+		if (existsSync(candidate)) return candidate;
+	}
+	if (provider === "cursor") {
+		const candidate = join(homedir(), ".pi", "agent", "npm", "node_modules", "pi-cursor-sdk");
+		if (existsSync(candidate)) return candidate;
+	}
+	return null;
+}
+
+/**
  * Execute an isolated subagent run.
  * Prefers `subagent` CLI (if tmux is available); seamlessly falls back to
  * standalone non-interactive `pi --print` (which provides full subagent physical isolation
  * without requiring tmux).
  */
 export async function runIsolatedSubagent(options: IsolatedAgentOptions): Promise<string> {
+	const defaultTimeout = options.timeoutMs || 240000;
+
 	// 1. If tmux is available, attempt subagent CLI
 	if (hasTmux()) {
 		let subagentHandle: string | null = null;
@@ -194,7 +211,7 @@ export async function runIsolatedSubagent(options: IsolatedAgentOptions): Promis
 
 			const spawnRes = await execCommandAsync(subagentCmd, spawnArgs, {
 				cwd: options.cwd,
-				timeoutMs: 10000,
+				timeoutMs: 15000,
 				signal: options.signal,
 			});
 
@@ -203,10 +220,10 @@ export async function runIsolatedSubagent(options: IsolatedAgentOptions): Promis
 				if (subagentHandle) {
 					const waitRes = await execCommandAsync(
 						subagentCmd,
-						["wait", subagentHandle, "--timeout", String(Math.floor((options.timeoutMs || 120000) / 1000))],
+						["wait", subagentHandle, "--timeout", String(Math.floor(defaultTimeout / 1000))],
 						{
 							cwd: options.cwd,
-							timeoutMs: options.timeoutMs || 125000,
+							timeoutMs: defaultTimeout + 5000,
 							signal: options.signal,
 						},
 					);
@@ -229,6 +246,7 @@ export async function runIsolatedSubagent(options: IsolatedAgentOptions): Promis
 
 	// 2. Direct isolated subagent process via headless `pi --print`
 	// Physically isolated in a separate child process with scoped tools and no skills/prompt-templates
+	const providerExt = resolveProviderExtension(options.provider);
 	const piArgs = [
 		"--provider",
 		options.provider,
@@ -238,13 +256,17 @@ export async function runIsolatedSubagent(options: IsolatedAgentOptions): Promis
 		options.tools,
 		"--no-skills",
 		"--no-prompt-templates",
-		"--print",
-		options.prompt,
 	];
+
+	if (providerExt) {
+		piArgs.push("--no-extensions", "--extension", providerExt);
+	}
+
+	piArgs.push("--print", options.prompt);
 
 	const piRes = await execCommandAsync("pi", piArgs, {
 		cwd: options.cwd,
-		timeoutMs: options.timeoutMs || 120000,
+		timeoutMs: defaultTimeout,
 		signal: options.signal,
 	});
 

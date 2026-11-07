@@ -46,16 +46,20 @@ export async function runScoutTask(
 	const maxSummaryTokens = config.maxSummaryTokens || DEFAULT_CONFIG.maxSummaryTokens;
 	const maxSummaryChars = maxSummaryTokens * 4;
 
-	// Prepare read-only git context for rapid subagent orientation
+	// Prepare read-only git context and file skeleton for rapid subagent orientation
 	const gitStatusShort = runGitCmd(ctx.cwd, "status --short") || "(clean)";
 	const gitRecentLogs = runGitCmd(ctx.cwd, "log -n 5 --oneline") || "(no commits)";
+	const rawFiles = runGitCmd(ctx.cwd, "ls-files");
+	const fileTree = rawFiles
+		? rawFiles.split("\n").filter(Boolean).slice(0, 150).join("\n")
+		: gitStatusShort;
 	const focusInstruction =
 		params.focusPaths && params.focusPaths.length > 0
 			? `\nFocus investigation on paths: ${params.focusPaths.join(", ")}`
 			: "";
 
 	const prompt = [
-		"You are a dedicated repository scout subagent. Your mission is to perform a physically isolated, read-only reconnaissance of the workspace and construct a dense architectural summary.",
+		"You are a dedicated repository scout subagent. Your mission is to perform an efficient, physically isolated, read-only reconnaissance of the workspace and construct a dense architectural summary.",
 		"",
 		"=== READ-ONLY GIT CONTEXT ===",
 		`HEAD: ${gitHead}`,
@@ -63,10 +67,15 @@ export async function runScoutTask(
 		`Status:\n${gitStatusShort}`,
 		focusInstruction,
 		"",
+		"=== WORKSPACE FILE TREE SKELETON ===",
+		fileTree,
+		"",
 		"=== INSTRUCTIONS ===",
-		"1. Use read, grep, find, and ls to inspect directory hierarchy, configuration files, core entry points, and primary exported interfaces.",
-		"2. Strictly read-only: do not attempt to write, edit, or modify any files.",
-		`3. Wrap a high-density architectural summary (<${maxSummaryTokens} tokens, ~${maxSummaryChars} chars) inside <repo_summary>...</repo_summary> tags at the end of your response.`,
+		"1. The workspace file tree skeleton is already provided above. Do NOT waste tool turns repeatedly listing directory contents.",
+		"2. Inspect ONLY the top 2-4 critical configuration files or entry point modules using the read tool.",
+		"3. Strictly read-only: do not attempt to write, edit, or modify any files.",
+		"4. Complete reconnaissance swiftly within 2-3 tool turns and directly output the final summary.",
+		`5. Wrap a high-density architectural summary (<${maxSummaryTokens} tokens, ~${maxSummaryChars} chars) inside <repo_summary>...</repo_summary> tags at the end of your response.`,
 		"   The summary must cover: technology stack, top-level directory responsibilities, main workflow / runtime lifecycle, and key domain models / protocol signatures.",
 	].join("\n");
 
@@ -75,10 +84,10 @@ export async function runScoutTask(
 			name: "scout",
 			provider,
 			model,
-			tools: "read,grep,find,ls",
+			tools: "read,grep,find",
 			cwd: ctx.cwd,
 			prompt,
-			timeoutMs: 120000,
+			timeoutMs: 240000,
 			signal,
 		});
 
