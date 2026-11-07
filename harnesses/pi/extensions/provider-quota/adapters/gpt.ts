@@ -116,7 +116,7 @@ export class GptAdapter implements ProviderAdapter {
 					kind: "weekly",
 					groupId: "openai-codex",
 					groupLabel: "ChatGPT Subscription",
-					label: "GPT 1w",
+					label: "1w",
 					modelKeys: ["gpt", "openai", "codex"],
 					remainingPercent,
 					windowMinutes,

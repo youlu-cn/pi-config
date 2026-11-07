@@ -3,6 +3,7 @@ import test from "node:test";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { formatEffortWithFast } from "./shared.ts";
 import {
+	dedupeUsageWindowLabels,
 	findUnknownStatusSegments,
 	fitStatuslineItems,
 	isExtensionStatusExcluded,
@@ -126,6 +127,20 @@ test("unknown configured segments are reported", () => {
 		),
 		["missing"],
 	);
+});
+
+test("usage window labels keep the model name only on the first window", () => {
+	assert.deepEqual(dedupeUsageWindowLabels(["Argon 1w"]), ["Argon 1w"]);
+	assert.deepEqual(dedupeUsageWindowLabels(["Gemini 5h", "Gemini 1w"]), [
+		"Gemini 5h",
+		"1w",
+	]);
+	assert.deepEqual(dedupeUsageWindowLabels(["Claude 5h", "Claude 1w"]), [
+		"Claude 5h",
+		"1w",
+	]);
+	// Already-deduped weekly labels stay unchanged.
+	assert.deepEqual(dedupeUsageWindowLabels(["Gemini 5h", "1w"]), ["Gemini 5h", "1w"]);
 });
 
 test("subscription usage event is decoded and sorted by canonical window", () => {

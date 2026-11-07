@@ -108,17 +108,24 @@ export async function resolveAntigravityToken(
 }
 
 /**
- * Formats milliseconds remaining into human-readable countdown string (e.g. "4h 20m" or "35m")
+ * Formats milliseconds remaining into a compact countdown.
+ * ≥1 day → "1d2h"; <1 day → "23h15m"; under an hour → "35m" / "30s".
  */
 export function formatCountdown(ms: number): string {
 	const clamped = Math.max(0, ms);
 	const totalSeconds = Math.round(clamped / 1000);
 	if (totalSeconds < 60) return `${totalSeconds}s`;
-	const hours = Math.floor(totalSeconds / 3600);
-	const minutes = Math.floor((totalSeconds % 3600) / 60);
 
+	const totalMinutes = Math.floor(totalSeconds / 60);
+	const days = Math.floor(totalMinutes / (24 * 60));
+	const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+	const minutes = totalMinutes % 60;
+
+	if (days > 0) {
+		return hours > 0 ? `${days}d${hours}h` : `${days}d`;
+	}
 	if (hours > 0) {
-		return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+		return minutes > 0 ? `${hours}h${minutes}m` : `${hours}h`;
 	}
 	return `${minutes}m`;
 }

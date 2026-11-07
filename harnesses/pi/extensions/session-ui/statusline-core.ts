@@ -179,6 +179,18 @@ function subscriptionUsageWindowRank(
 	return 3;
 }
 
+/** Keep the model/group name on the first window only when several share it.
+ * e.g. ["Gemini 5h", "Gemini 1w"] → ["Gemini 5h", "1w"] */
+export function dedupeUsageWindowLabels(labels: readonly string[]): string[] {
+	if (labels.length <= 1) return [...labels];
+	const firstToken = labels[0]?.split(/\s+/)[0];
+	if (!firstToken) return [...labels];
+	const prefix = `${firstToken} `;
+	return labels.map((label, index) =>
+		index === 0 || !label.startsWith(prefix) ? label : label.slice(prefix.length),
+	);
+}
+
 /** Decodes the subscription-usage v1 event at the extension boundary. */
 export function parseSubscriptionUsageEvent(
 	data: unknown,

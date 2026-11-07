@@ -10,13 +10,15 @@ interface CacheEntry {
 	expiresAt: number;
 }
 
-/** Match best quota windows for the given model ID (returns all windows in matched group) */
+/** Match best quota windows for the given model ID (returns all windows in matched group).
+ * Returns an empty array when no group matches: a window that does not describe the
+ * active model must never be shown as if it did. */
 export function matchQuotaWindowsForModel(
 	windows: QuotaWindow[],
 	modelId?: string,
 ): QuotaWindow[] {
 	if (!windows || windows.length === 0) return [];
-	if (!modelId || windows.length === 1) return windows;
+	if (!modelId) return windows;
 
 	const normalized = modelId.toLowerCase();
 	let bestGroupId: string | undefined;
@@ -34,11 +36,10 @@ export function matchQuotaWindowsForModel(
 	}
 
 	if (bestGroupId) {
-		const groupWindows = windows.filter((w) => w.groupId === bestGroupId);
-		if (groupWindows.length > 0) return groupWindows;
+		return windows.filter((w) => w.groupId === bestGroupId);
 	}
 
-	return [windows[0]!];
+	return [];
 }
 
 /** Match best single quota window for backward compatibility */
@@ -46,8 +47,7 @@ export function matchQuotaWindow(
 	windows: QuotaWindow[],
 	modelId?: string,
 ): QuotaWindow | undefined {
-	const matched = matchQuotaWindowsForModel(windows, modelId);
-	return matched[0] ?? windows[0];
+	return matchQuotaWindowsForModel(windows, modelId)[0];
 }
 
 export class QuotaScheduler {
@@ -97,10 +97,16 @@ export class QuotaScheduler {
 	/** Query quota for active model's provider and broadcast if changed (with singleflight deduplication) */
 	async refreshActiveProvider(ctx: ExtensionContext): Promise<ProviderQuotaReport | undefined> {
 		const currentProvider = ctx.model?.provider;
-		if (!currentProvider) return undefined;
+		if (!currentProvider) {
+			this.broadcastUnavailable("none");
+			return undefined;
+		}
 
 		const adapter = this.registry.findAdapterForProvider(currentProvider);
 		if (!adapter || !adapter.isConfigured(ctx)) {
+			// Unknown provider: clear the statusline instead of leaving the previous
+			// provider's quota on screen.
+			this.broadcastUnavailable(currentProvider);
 			return undefined;
 		}
 
@@ -136,7 +142,12 @@ export class QuotaScheduler {
 				this.broadcast(report, ctx);
 				return report;
 			} catch {
-				// Silent fallback: do not interrupt agent execution
+				// Silent fallback: do not interrupt agent execution. Keep the last known
+				// good report for this adapter, but never keep showing a report that
+				// belongs to a different provider.
+				if (!this.cache.has(adapter.id)) {
+					this.broadcastUnavailable(currentProvider);
+				}
 				return undefined;
 			} finally {
 				cleanup();
@@ -153,11 +164,19 @@ export class QuotaScheduler {
 		let targetWindows = report.windows;
 		const modelId = ctx?.model?.id;
 
-		if (modelId && report.windows.length > 1) {
-			const matched = matchQuotaWindowsForModel(report.windows, modelId);
-			if (matched.length > 0) {
-				targetWindows = matched;
-			}
+		// Single-group providers (e.g. ChatGPT / Grok / Claude Bridge) apply to all
+		// models served by that provider; multi-group providers (e.g. Antigravity)
+		// match the specific model family group.
+		const distinctGroups = new Set(report.windows.map((w) => w.groupId || ""));
+		if (modelId && distinctGroups.size > 1) {
+			targetWindows = matchQuotaWindowsForModel(report.windows, modelId);
+		}
+
+		if (targetWindows.length === 0) {
+			// No window describes the active model; showing another group's numbers
+			// would misattribute quota, so clear the display instead.
+			this.broadcastUnavailable(report.providerId);
+			return;
 		}
 
 		this.pi.events.emit(SUBSCRIPTION_USAGE_EVENT, {
@@ -167,6 +186,17 @@ export class QuotaScheduler {
 			capturedAt: report.capturedAt,
 			displayMode: "remaining",
 			windows: targetWindows,
+		});
+	}
+
+	/** Emit a non-ready status so consumers drop the previously displayed quota. */
+	private broadcastUnavailable(providerId: string): void {
+		this.pi.events.emit(SUBSCRIPTION_USAGE_EVENT, {
+			v: 1,
+			status: "unavailable",
+			providerId,
+			capturedAt: Date.now(),
+			windows: [],
 		});
 	}
 }

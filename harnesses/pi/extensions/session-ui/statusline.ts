@@ -14,6 +14,7 @@ import {
 	findUnknownStatusSegments,
 	fitStatuslineItems,
 	isExtensionStatusExcluded,
+	dedupeUsageWindowLabels,
 	parseSubscriptionUsageEvent,
 	separatorBetweenStatuslineSegments,
 	type StatuslineOverflow,
@@ -267,8 +268,9 @@ function registerBuiltInSegments(
 		render: ({ theme }) => {
 			const usage = getUsageFromEvent();
 			if (!usage) return undefined;
+			const labels = dedupeUsageWindowLabels(usage.windows.map((w) => w.label));
 			const value = usage.windows
-				.map((window) => {
+				.map((window, index) => {
 					const icon = theme.fg("accent", usageWindowIcon(window.kind));
 					const percent = theme.fg(
 						remainingUsageColor(window.remainingPercent),
@@ -277,17 +279,17 @@ function registerBuiltInSegments(
 					const reset = window.resetCountdown
 						? ` ${theme.fg("dim", `\u21BB${window.resetCountdown}`)}`
 						: "";
-					return `${icon} ${window.label} ${percent}${reset}`;
+					return `${icon} ${labels[index] ?? window.label} ${percent}${reset}`;
 				})
 				.join("  ");
 			const compact = usage.windows
-				.map((window) => {
+				.map((window, index) => {
 					const icon = theme.fg("accent", usageWindowIcon(window.kind));
 					const percent = theme.fg(
 						remainingUsageColor(window.remainingPercent),
 						theme.bold(`${Math.round(window.displayPercent)}%`),
 					);
-					return `${icon} ${window.label} ${percent}`;
+					return `${icon} ${labels[index] ?? window.label} ${percent}`;
 				})
 				.join(" ");
 			return value ? { full: value, compact } : undefined;

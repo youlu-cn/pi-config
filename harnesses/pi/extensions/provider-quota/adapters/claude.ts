@@ -52,7 +52,7 @@ export class ClaudeAdapter implements ProviderAdapter {
 			kind: "weekly",
 			groupId: "claude",
 			groupLabel: "Claude Code Subscription",
-			label: "Claude 1w",
+			label: "1w",
 			modelKeys: ["claude", "anthropic"],
 			remainingPercent: 100,
 			windowMinutes: 10080,

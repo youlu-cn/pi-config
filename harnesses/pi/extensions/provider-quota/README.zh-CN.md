@@ -39,3 +39,10 @@ provider-quota/
 ## 交互命令
 
 - `/quota`：手动查看当前模型及所有已配置 Provider 的配额详情、账号与重置倒计时。
+
+---
+
+## 行为说明
+
+- 状态栏额度按“模型分组”归属：切换到未注册的 Provider（如 `cursor`、`deepseek`）或未匹配的分组时，`usage` 段会被清空，不会残留上一个模型的额度。
+- Antigravity 优先请求 `https://daily-cloudcode-pa.googleapis.com` 并携带完整 CLI `User-Agent` 指纹，确保完整返回全部三个分组（`Gemini Models`、`Claude and GPT models`、`Gemini 4 Argon`）及实时消耗的 `remainingFraction`，不再生成硬编码的 100% 兜底窗口。

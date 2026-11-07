@@ -30,3 +30,10 @@ provider-quota/
 ## Commands
 
 - `/quota`: Displays active and configured quota details and reset countdowns.
+
+---
+
+## Behavior notes
+
+- Statusline windows are attributed per model group. When switching to an unknown provider (e.g. `cursor`, `deepseek`) or an unmatched model group, the `usage` segment is cleared instead of showing stale quota from the previous model.
+- Antigravity queries `https://daily-cloudcode-pa.googleapis.com` first with the full CLI `User-Agent` fingerprint so all three quota groups (`Gemini Models`, `Claude and GPT models`, `Gemini 4 Argon`) and live `remainingFraction` values are returned accurately.
