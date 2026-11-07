@@ -5,6 +5,8 @@ import {
 	formatResultSummary,
 	formatErrorLines,
 	formatGeminiDots,
+	formatEditDiffPreview,
+	formatWritePreview,
 } from "./claude-tool-renderer-core.ts";
 
 const mockTheme = {
@@ -120,6 +122,43 @@ test("formatResultSummary produces clean folded summaries for various tools", ()
 		200,
 	);
 	assert.equal(grepSummary, "Found 3 matches");
+});
+
+test("formatEditDiffPreview renders Claude Code style diff stats and colored lines", () => {
+	const preview = formatEditDiffPreview(
+		{
+			path: "src/app.ts",
+			edits: [{ oldText: "const a = 1;", newText: "const a = 2;\nconst b = 3;" }],
+		},
+		{
+			details: {
+				diff: " 10 import foo\n-11 const a = 1;\n+11 const a = 2;\n+12 const b = 3;",
+			},
+		},
+		mockTheme,
+		false,
+	);
+
+	assert.ok(preview.includes("Added 2 lines, removed 1 line"));
+	assert.ok(preview.includes("[toolDiffRemoved]-11 const a = 1;[/toolDiffRemoved]"));
+	assert.ok(preview.includes("[toolDiffAdded]+11 const a = 2;[/toolDiffAdded]"));
+	assert.ok(preview.includes("[toolDiffAdded]+12 const b = 3;[/toolDiffAdded]"));
+});
+
+test("formatWritePreview counts args.content lines accurately and renders code preview", () => {
+	const preview = formatWritePreview(
+		{
+			path: "src/hello.ts",
+			content: "export const x = 1;\nexport const y = 2;\nexport const z = 3;\n",
+		},
+		{ content: [{ type: "text", text: "Successfully wrote to src/hello.ts" }] },
+		mockTheme,
+		false,
+	);
+
+	assert.ok(preview.includes("Wrote 3 lines"));
+	assert.ok(preview.includes("1 │ [/dim][toolOutput]export const x = 1;"));
+	assert.ok(preview.includes("3 │ [/dim][toolOutput]export const z = 3;"));
 });
 
 test("formatErrorLines builds tree-structured red error message", () => {

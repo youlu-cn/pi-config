@@ -62,13 +62,13 @@ export function formatToolHeader(
 	} else if (toolName === "bash") {
 		displayName = "Bash";
 		const cmd = typeof args?.command === "string" ? args.command.trim().replace(/\s+/g, " ") : "";
-		paramSummary = cmd.length > 80 ? `${cmd.slice(0, 77)}...` : cmd;
+		paramSummary = cmd.length > 140 ? `${cmd.slice(0, 137)}...` : cmd;
 	} else if (toolName === "edit") {
 		displayName = "Edit";
-		paramSummary = formatPath(args?.path, cwd);
+		paramSummary = formatPath(args?.file_path ?? args?.path, cwd);
 	} else if (toolName === "write") {
 		displayName = "Write";
-		paramSummary = formatPath(args?.path, cwd);
+		paramSummary = formatPath(args?.file_path ?? args?.path, cwd);
 	} else if (toolName === "grep") {
 		displayName = "Grep";
 		const pat = typeof args?.pattern === "string" ? `"${args.pattern}"` : "";
@@ -87,7 +87,7 @@ export function formatToolHeader(
 			for (const k of Object.keys(args)) {
 				if (typeof args[k] === "string" && args[k].length > 0) {
 					const val = args[k].trim().replace(/\s+/g, " ");
-					paramSummary = val.length > 50 ? `${val.slice(0, 47)}...` : val;
+					paramSummary = val.length > 120 ? `${val.slice(0, 117)}...` : val;
 					break;
 				}
 			}
@@ -117,6 +117,175 @@ function countLines(text: string): number {
 	return text.trim().split("\n").length;
 }
 
+function replaceTabs(text: string): string {
+	return text.replace(/\t/g, "  ");
+}
+
+/**
+ * Count added and removed lines in a Pi diff string or edits array.
+ */
+export function countDiffStats(
+	diffText: string | undefined,
+	edits: any[] | undefined,
+): { added: number; removed: number } {
+	let added = 0;
+	let removed = 0;
+
+	if (typeof diffText === "string" && diffText.trim().length > 0) {
+		for (const line of diffText.split("\n")) {
+			if (line.startsWith("+")) added++;
+			else if (line.startsWith("-")) removed++;
+		}
+		return { added, removed };
+	}
+
+	if (Array.isArray(edits)) {
+		for (const edit of edits) {
+			if (typeof edit?.oldText === "string" && edit.oldText.length > 0) {
+				removed += edit.oldText.split("\n").length;
+			}
+			if (typeof edit?.newText === "string" && edit.newText.length > 0) {
+				added += edit.newText.split("\n").length;
+			}
+		}
+	}
+
+	return { added, removed };
+}
+
+/**
+ * Format Claude Code style colored diff block for Edit results.
+ */
+export function formatEditDiffPreview(
+	args: any,
+	result: { content?: any[]; details?: any },
+	theme: Theme,
+	expanded = false,
+	pad = "",
+): string {
+	const diffText: string | undefined = result?.details?.diff;
+	const edits: any[] | undefined = Array.isArray(args?.edits)
+		? args.edits
+		: typeof args?.oldText === "string" || typeof args?.newText === "string"
+			? [{ oldText: args.oldText, newText: args.newText }]
+			: undefined;
+
+	const { added, removed } = countDiffStats(diffText, edits);
+	const statsParts: string[] = [];
+	if (added > 0) statsParts.push(`Added ${added} line${added === 1 ? "" : "s"}`);
+	if (removed > 0) statsParts.push(`removed ${removed} line${removed === 1 ? "" : "s"}`);
+	const summaryText =
+		statsParts.length > 0
+			? statsParts.join(", ")
+			: `${edits?.length ?? 1} replacement${(edits?.length ?? 1) === 1 ? "" : "s"} applied`;
+
+	const hint = expanded ? "(ctrl+o to collapse)" : "(ctrl+o to expand)";
+	const outLines: string[] = [
+		`${pad}  ${theme.fg("dim", `└ ${summaryText} ${hint}`)}`,
+	];
+
+	// Build colored diff lines from details.diff or fallback to edits array
+	const rawDiffLines: { type: "add" | "remove" | "context"; text: string }[] = [];
+
+	if (typeof diffText === "string" && diffText.trim().length > 0) {
+		for (const line of diffText.split("\n")) {
+			if (!line.trim() && rawDiffLines.length === 0) continue;
+			if (line.startsWith("+")) {
+				rawDiffLines.push({ type: "add", text: replaceTabs(line) });
+			} else if (line.startsWith("-")) {
+				rawDiffLines.push({ type: "remove", text: replaceTabs(line) });
+			} else {
+				rawDiffLines.push({ type: "context", text: replaceTabs(line) });
+			}
+		}
+	} else if (edits && edits.length > 0) {
+		for (const edit of edits) {
+			if (typeof edit?.oldText === "string") {
+				for (const l of edit.oldText.split("\n")) {
+					rawDiffLines.push({ type: "remove", text: `- ${replaceTabs(l)}` });
+				}
+			}
+			if (typeof edit?.newText === "string") {
+				for (const l of edit.newText.split("\n")) {
+					rawDiffLines.push({ type: "add", text: `+ ${replaceTabs(l)}` });
+				}
+			}
+		}
+	}
+
+	if (rawDiffLines.length === 0) {
+		return outLines.join("\n");
+	}
+
+	const maxLines = expanded ? rawDiffLines.length : 12;
+	const visible = rawDiffLines.slice(0, maxLines);
+	for (const item of visible) {
+		if (item.type === "add") {
+			outLines.push(`${pad}      ${theme.fg("toolDiffAdded", item.text)}`);
+		} else if (item.type === "remove") {
+			outLines.push(`${pad}      ${theme.fg("toolDiffRemoved", item.text)}`);
+		} else {
+			outLines.push(`${pad}      ${theme.fg("toolDiffContext", item.text)}`);
+		}
+	}
+
+	const remaining = rawDiffLines.length - visible.length;
+	if (remaining > 0) {
+		outLines.push(
+			`${pad}      ${theme.fg("dim", `... (${remaining} more diff lines, ctrl+o to expand)`)}`,
+		);
+	}
+
+	return outLines.join("\n");
+}
+
+/**
+ * Format Claude Code style code preview for Write results.
+ */
+export function formatWritePreview(
+	args: any,
+	result: { content?: any[]; details?: any },
+	theme: Theme,
+	expanded = false,
+	pad = "",
+): string {
+	const writtenContent =
+		typeof args?.content === "string" ? args.content : getTextContent(result?.content);
+	const allLines = writtenContent
+		? writtenContent.replace(/\r\n/g, "\n").trimEnd().split("\n")
+		: [];
+	const lineCount = allLines.length;
+
+	const hint = expanded ? "(ctrl+o to collapse)" : "(ctrl+o to expand)";
+	const summary =
+		lineCount > 0
+			? `Wrote ${lineCount} line${lineCount === 1 ? "" : "s"}`
+			: "Wrote file";
+	const outLines: string[] = [
+		`${pad}  ${theme.fg("dim", `└ ${summary} ${hint}`)}`,
+	];
+
+	if (lineCount > 0 && typeof args?.content === "string") {
+		const maxLines = expanded ? lineCount : 8;
+		const visible = allLines.slice(0, maxLines);
+		for (let i = 0; i < visible.length; i++) {
+			const num = String(i + 1).padStart(3, " ");
+			const codeLine = replaceTabs(visible[i]!);
+			outLines.push(
+				`${pad}      ${theme.fg("dim", `${num} │ `)}${theme.fg("toolOutput", codeLine)}`,
+			);
+		}
+		const remaining = lineCount - visible.length;
+		if (remaining > 0) {
+			outLines.push(
+				`${pad}      ${theme.fg("dim", `... (${remaining} more lines, ctrl+o to expand)`)}`,
+			);
+		}
+	}
+
+	return outLines.join("\n");
+}
+
 export function formatResultSummary(
 	toolName: string,
 	args: any,
@@ -137,11 +306,20 @@ export function formatResultSummary(
 		return lines > 0 ? `Executed (${lines} lines output)` : `Executed`;
 	}
 	if (toolName === "edit") {
+		const { added, removed } = countDiffStats(result?.details?.diff, args?.edits);
+		if (added > 0 || removed > 0) {
+			const parts: string[] = [];
+			if (added > 0) parts.push(`Added ${added} line${added === 1 ? "" : "s"}`);
+			if (removed > 0) parts.push(`removed ${removed} line${removed === 1 ? "" : "s"}`);
+			return parts.join(", ");
+		}
 		const editsCount = Array.isArray(args?.edits) ? args.edits.length : 1;
 		return `${editsCount} replacement${editsCount === 1 ? "" : "s"} applied`;
 	}
 	if (toolName === "write") {
-		return `Wrote ${lines} line${lines === 1 ? "" : "s"}`;
+		const contentLines =
+			typeof args?.content === "string" ? countLines(args.content) : lines;
+		return `Wrote ${contentLines} line${contentLines === 1 ? "" : "s"}`;
 	}
 	if (toolName === "grep") {
 		return `Found ${lines} match${lines === 1 ? "" : "es"}`;

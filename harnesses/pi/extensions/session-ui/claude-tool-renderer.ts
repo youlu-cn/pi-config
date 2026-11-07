@@ -1,9 +1,11 @@
 import type { ExtensionAPI, ToolRenderContext } from "@earendil-works/pi-coding-agent";
 import { Container, Text } from "@earendil-works/pi-tui";
 import {
+	formatEditDiffPreview,
 	formatErrorLines,
 	formatResultSummary,
 	formatToolHeader,
+	formatWritePreview,
 	getTextContent,
 } from "./claude-tool-renderer-core.ts";
 import type { AnimationStyle } from "./work-animation-core.ts";
@@ -118,7 +120,41 @@ export function registerClaudeToolRenderer(
 					return component;
 				}
 
-				// 2. Success state, collapsed by default: render tree summary line
+				// 2. Edit tool: always show Claude Code style colored diff preview (collapsed = 12 lines, expanded = all)
+				if (toolName === "edit") {
+					const diffPreview = formatEditDiffPreview(
+						context.args,
+						result,
+						theme,
+						options.expanded,
+						pad,
+					);
+					const component =
+						context.lastComponent instanceof Text
+							? context.lastComponent
+							: new Text("", 0, 0);
+					component.setText(diffPreview);
+					return component;
+				}
+
+				// 3. Write tool: show accurate line count + code preview (collapsed = 8 lines, expanded = all)
+				if (toolName === "write") {
+					const writePreview = formatWritePreview(
+						context.args,
+						result,
+						theme,
+						options.expanded,
+						pad,
+					);
+					const component =
+						context.lastComponent instanceof Text
+							? context.lastComponent
+							: new Text("", 0, 0);
+					component.setText(writePreview);
+					return component;
+				}
+
+				// 4. Other tools in collapsed state: render single-line tree summary
 				if (!options.expanded) {
 					const summary = formatResultSummary(
 						toolName,
@@ -135,7 +171,7 @@ export function registerClaudeToolRenderer(
 					return component;
 				}
 
-				// 3. Success state, expanded by user: keep collapse hint and render details
+				// 5. Expanded state for other tools: keep collapse hint and render details
 				const container =
 					context.lastComponent instanceof Container
 						? context.lastComponent
