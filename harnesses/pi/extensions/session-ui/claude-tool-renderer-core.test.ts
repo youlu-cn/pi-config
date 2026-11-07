@@ -18,7 +18,7 @@ const mockTheme = {
 test("formatToolHeader formats tool name and arguments with Claude style and subtle bullet", () => {
 	const cwd = "/Users/boris/code/demo";
 
-	// 1. Read tool succeeded (uses subtle bullet • instead of large ●)
+	// 1. Read tool succeeded (uses solid bullet ●)
 	const readHeader = formatToolHeader(
 		"read",
 		{ path: "/Users/boris/code/demo/server/test/models/User.test.js" },
@@ -27,7 +27,7 @@ test("formatToolHeader formats tool name and arguments with Claude style and sub
 		true,
 		false,
 	);
-	assert.ok(readHeader.includes("[success]• ["));
+	assert.ok(readHeader.includes("[success]● ["));
 	assert.ok(readHeader.includes("<b>Read</b>"));
 	assert.ok(readHeader.includes("(server/test/models/User.test.js)"));
 
@@ -40,7 +40,7 @@ test("formatToolHeader formats tool name and arguments with Claude style and sub
 		true,
 		true,
 	);
-	assert.ok(bashErrorHeader.includes("[error]• ["));
+	assert.ok(bashErrorHeader.includes("[error]● ["));
 	assert.ok(bashErrorHeader.includes("<b>Bash</b>"));
 	assert.ok(bashErrorHeader.includes("(npm list nyc c8 istanbul)"));
 
@@ -55,7 +55,7 @@ test("formatToolHeader formats tool name and arguments with Claude style and sub
 		1,
 		"claude",
 	);
-	assert.ok(runningClaudeHeader.includes("[accent]✦[/accent]"));
+	assert.ok(runningClaudeHeader.includes("[accent]✶[/accent]"));
 	assert.ok(runningClaudeHeader.includes("<b>Bash</b>"));
 	assert.ok(runningClaudeHeader.includes("(esc to interrupt)"));
 

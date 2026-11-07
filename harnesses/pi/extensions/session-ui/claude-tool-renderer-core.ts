@@ -44,9 +44,9 @@ export function formatToolHeader(
 	if (!isDone) {
 		icon = `${renderSpinnerFrame(animStep, theme, style, 3)} `;
 	} else if (isError) {
-		icon = theme.fg("error", "• ");
+		icon = theme.fg("error", "● ");
 	} else {
-		icon = theme.fg("success", "• ");
+		icon = theme.fg("success", "● ");
 	}
 
 	let displayName = capitalize(toolName);

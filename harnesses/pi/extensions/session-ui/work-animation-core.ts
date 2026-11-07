@@ -15,8 +15,8 @@ export function isValidAnimationStyle(value: unknown): value is AnimationStyle {
 }
 
 const STYLE_FRAMES: Record<Exclude<AnimationStyle, "dots">, readonly string[]> = {
-	// Claude Code starburst: visually balanced crisp stars, strictly narrow EAW (no Ambiguous-width blowout)
-	claude: ["✢", "✦", "✶", "✳", "✶", "✦"],
+	// Claude Code starburst: visually prominent, balanced crisp stars, strictly narrow EAW (zero horizontal jitter)
+	claude: ["✦", "✶", "✷", "✹", "✷", "✶"],
 	// Google Gemini sparkle pulse: crisp four-point stars
 	gemini: ["✧", "✦", "❖", "✦"],
 	// Smooth Braille circular spinner
