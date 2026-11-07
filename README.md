@@ -16,10 +16,12 @@
 │       ├── plugin-configs/           # 插件专属配置文件
 │       │   ├── pi-fff/config.json    # Fast File Finder 配置（覆盖模式、禁用 Home 深度扫描）
 │       │   ├── web-search/config.json# 网页检索配置（auto-summary、代理/SSRF网段）
-│       │   └── session-ui/config.json# 状态栏段项定制（模型、耗时、目录、分支、用量等）
+│       │   ├── session-ui/config.json# 状态栏段项定制（模型、耗时、目录、分支、用量等）
+│       │   └── repo-cache-manager/config.json # Subagent 模型与缓存阈值配置
 │       ├── extensions/               # 本地自定义扩展存放目录
 │       │   ├── session-ui/           # 状态栏/回合结算/紧凑粘贴/UI元数据增强插件
 │       │   ├── provider-quota/       # 多 Provider 订阅配额与速率限制监控插件
+│       │   ├── repo-cache-manager/   # Subagent 物理隔离侦察/规划与项目架构缓存挂载插件
 │       │   └── .gitkeep
 │       ├── themes/                   # 自定义主题目录
 │       │   ├── claude-dark.json      # Claude Code 风格深色主题（去底色、低噪思考文本）
@@ -70,6 +72,7 @@
 - **自定义插件 (`extensions`)**：
   - `session-ui`：全功能 UI 增强扩展（包含定制状态栏 Statusline、回合结算摘要 Turn-Summary、紧凑粘贴 Compact-Paste、工具执行动效 Work-Animation、会话元数据控制器等）。
   - `provider-quota`：多 Provider 订阅配额与重置倒计时监控扩展（微内核调度器 + 插件化 Adapters 架构，对接 Antigravity、OpenAI/GPT、Claude、Grok 等）。
+  - `repo-cache-manager`：基于 Subagent 物理隔离（`scout` 只读侦察兵 + `architect` 架构规划师）与工作区扫描缓存挂载扩展，严禁篡改主会话模型，确保主模型 100% KV Cache 命中率。
 
 ### 2. 键位映射 (`harnesses/pi/config/keybindings.json`)
 
@@ -93,6 +96,9 @@
 - **`session-ui/config.json`**（对应状态栏与会话扩展）：
   - 映射目标：`~/.pi/agent/extensions/session-ui/config.json`
   - 精选 statusline 显示段：`model`, `effort`, `directory`, `branch`, `context`, `usage`, `cache`, `extensions`。
+- **`repo-cache-manager/config.json`**（对应架构缓存与 Subagent 扩展）：
+  - 映射目标：`~/.pi/agent/repo-cache-manager.json` 及 `~/.pi/agent/extensions/repo-cache-manager/config.json`
+  - 自定义 `scoutModel`（默认 `antigravity/gemini-3.8-flash`）、`architectModel`（默认 `antigravity/gemini-4-argon`）及上下文保护阈值。
 - **过滤掉的部分**：
   - `claude-bridge`：当前环境未接入该插件。
   - `fast`：历史上已显式设置 `"enabled": false` 停用。

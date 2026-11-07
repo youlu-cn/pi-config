@@ -1,6 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 
 export interface ScanCacheData {
 	gitHead: string;
@@ -44,6 +44,9 @@ export function loadScanCache(cwd: string): ScanCacheData | null {
 	return null;
 }
 
+/**
+ * Atomically write scan cache to .pi/scan-cache.json via temporary file rename.
+ */
 export function saveScanCache(cwd: string, data: ScanCacheData): void {
 	const dir = join(cwd, ".pi");
 	if (!existsSync(dir)) {
@@ -53,7 +56,17 @@ export function saveScanCache(cwd: string, data: ScanCacheData): void {
 		...data,
 		scannedDirtyFiles: data.scannedDirtyFiles ?? getGitChangedFiles(cwd),
 	};
-	writeFileSync(getScanCachePath(cwd), JSON.stringify(payload, null, 2), "utf8");
+	const targetPath = getScanCachePath(cwd);
+	const tmpPath = `${targetPath}.${process.pid}.${Date.now()}.tmp`;
+	try {
+		writeFileSync(tmpPath, JSON.stringify(payload, null, 2), "utf8");
+		renameSync(tmpPath, targetPath);
+	} catch (err) {
+		try {
+			if (existsSync(tmpPath)) unlinkSync(tmpPath);
+		} catch {}
+		throw err;
+	}
 }
 
 export function clearScanCache(cwd: string): boolean {
@@ -69,9 +82,12 @@ export function clearScanCache(cwd: string): boolean {
 	return false;
 }
 
-export function runGitCmd(cwd: string, command: string): string | null {
+/**
+ * Execute git safely using execFileSync without invoking a shell.
+ */
+export function runGitArgs(cwd: string, args: string[]): string | null {
 	try {
-		return execSync(`git ${command}`, {
+		return execFileSync("git", args, {
 			cwd,
 			encoding: "utf8",
 			stdio: ["ignore", "pipe", "ignore"],
@@ -83,22 +99,45 @@ export function runGitCmd(cwd: string, command: string): string | null {
 }
 
 export function getGitHead(cwd: string): string | null {
-	return runGitCmd(cwd, "rev-parse HEAD");
+	return runGitArgs(cwd, ["rev-parse", "HEAD"]);
+}
+
+/**
+ * Parse a single line of `git status --porcelain` accurately,
+ * preserving spaces, handling renames (`R  old -> new`), and unquoting paths.
+ */
+export function parsePorcelainLine(line: string): string | null {
+	if (!line || line.length < 3) return null;
+	// Standard porcelain v1 line: XY<space>PATH or XY<space>ORIG -> PATH
+	const rawPath = line.slice(3).trim();
+	if (!rawPath) return null;
+
+	const arrowIdx = rawPath.indexOf(" -> ");
+	const effectivePath = arrowIdx !== -1 ? rawPath.slice(arrowIdx + 4).trim() : rawPath;
+
+	if (effectivePath.startsWith('"') && effectivePath.endsWith('"') && effectivePath.length >= 2) {
+		return effectivePath.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+	}
+	return effectivePath;
 }
 
 export function getGitChangedFiles(cwd: string): string[] {
-	const out = runGitCmd(cwd, "status --porcelain");
-	if (!out) return [];
-
-	return out
-		.split("\n")
-		.map((line) => line.trim())
-		.filter((line) => line.length > 0)
-		.map((line) => {
-			// Porcelain format is "XY filename" or "R  old -> new"
-			const parts = line.split(/\s+/);
-			return parts.length >= 2 ? parts.slice(1).join(" ") : line;
+	try {
+		const out = execFileSync("git", ["-c", "core.quotePath=false", "status", "--porcelain", "-uall"], {
+			cwd,
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "ignore"],
+			timeout: 3000,
 		});
+		if (!out) return [];
+
+		return out
+			.split("\n")
+			.map((line) => parsePorcelainLine(line))
+			.filter((item): item is string => Boolean(item && item.length > 0));
+	} catch {
+		return [];
+	}
 }
 
 /**

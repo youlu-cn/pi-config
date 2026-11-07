@@ -201,6 +201,7 @@ export async function runIsolatedSubagent(options: IsolatedAgentOptions): Promis
 				options.model,
 				"--tools",
 				options.tools,
+				"--no-extensions",
 				"--no-skills",
 				"--no-prompt-templates",
 				"--cwd",
@@ -245,7 +246,7 @@ export async function runIsolatedSubagent(options: IsolatedAgentOptions): Promis
 	}
 
 	// 2. Direct isolated subagent process via headless `pi --print`
-	// Physically isolated in a separate child process with scoped tools and no skills/prompt-templates
+	// Always pass --no-extensions to prevent recursive plugin loading, and "--" to prevent flag injection
 	const providerExt = resolveProviderExtension(options.provider);
 	const piArgs = [
 		"--provider",
@@ -254,15 +255,16 @@ export async function runIsolatedSubagent(options: IsolatedAgentOptions): Promis
 		options.model,
 		"--tools",
 		options.tools,
+		"--no-extensions",
 		"--no-skills",
 		"--no-prompt-templates",
 	];
 
 	if (providerExt) {
-		piArgs.push("--no-extensions", "--extension", providerExt);
+		piArgs.push("--extension", providerExt);
 	}
 
-	piArgs.push("--print", options.prompt);
+	piArgs.push("--print", "--", options.prompt);
 
 	const piRes = await execCommandAsync("pi", piArgs, {
 		cwd: options.cwd,

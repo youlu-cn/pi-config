@@ -10,6 +10,7 @@ import {
 	loadScanCache,
 	saveScanCache,
 	clearScanCache,
+	parsePorcelainLine,
 	type ScanCacheData,
 } from "./scan-cache.ts";
 import { extractRepoSummary, parseModelSpec } from "./tools/scout.ts";
@@ -87,6 +88,14 @@ test("buildArchitectPrompt bounds total context length under budget", () => {
 	assert.ok(prompt.includes("=== PROJECT ARCHITECTURE SUMMARY ==="));
 	assert.ok(prompt.includes("=== TASK OBJECTIVE & REQUIREMENTS ==="));
 	assert.ok(prompt.includes("<task_spec>"));
+});
+
+test("parsePorcelainLine handles spaces, renames, and quoted paths accurately", () => {
+	assert.equal(parsePorcelainLine(" M src/index.ts"), "src/index.ts");
+	assert.equal(parsePorcelainLine("?? path with  two spaces.ts"), "path with  two spaces.ts");
+	assert.equal(parsePorcelainLine("R  old/file.ts -> new/file.ts"), "new/file.ts");
+	assert.equal(parsePorcelainLine('?? "quoted \\"path\\".ts"'), 'quoted "path".ts');
+	assert.equal(parsePorcelainLine(""), null);
 });
 
 test("scan-cache save, load, and clear operations", () => {

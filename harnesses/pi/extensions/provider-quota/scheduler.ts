@@ -54,6 +54,7 @@ export class QuotaScheduler {
 	private readonly pi: ExtensionAPI;
 	private readonly registry: AdapterRegistry;
 	private readonly cache: Map<string, CacheEntry> = new Map();
+	private readonly inFlight: Map<string, Promise<ProviderQuotaReport | undefined>> = new Map();
 	private readonly cacheTtlMs: number;
 	private pollTimer?: NodeJS.Timeout;
 	private activeAbortController?: AbortController;
@@ -71,6 +72,7 @@ export class QuotaScheduler {
 	/** Start background periodic polling */
 	start(ctx: ExtensionContext, intervalMs = 120_000): void {
 		this.stop();
+		this.activeAbortController = new AbortController();
 		// Initial immediate refresh for active model provider
 		this.refreshActiveProvider(ctx);
 
@@ -89,9 +91,10 @@ export class QuotaScheduler {
 			this.activeAbortController.abort();
 			this.activeAbortController = undefined;
 		}
+		this.inFlight.clear();
 	}
 
-	/** Query quota for active model's provider and broadcast if changed */
+	/** Query quota for active model's provider and broadcast if changed (with singleflight deduplication) */
 	async refreshActiveProvider(ctx: ExtensionContext): Promise<ProviderQuotaReport | undefined> {
 		const currentProvider = ctx.model?.provider;
 		if (!currentProvider) return undefined;
@@ -101,7 +104,7 @@ export class QuotaScheduler {
 			return undefined;
 		}
 
-		// Check in-memory cache
+		// 1. Check in-memory TTL cache
 		const now = Date.now();
 		const cached = this.cache.get(adapter.id);
 		if (cached && cached.expiresAt > now) {
@@ -109,22 +112,40 @@ export class QuotaScheduler {
 			return cached.report;
 		}
 
-		// Timeout control (8 seconds)
-		const { signal, cleanup } = createTimeoutSignal(8000);
-		try {
-			const report = await adapter.fetchQuota(ctx, signal);
-			this.cache.set(adapter.id, {
-				report,
-				expiresAt: now + this.cacheTtlMs,
-			});
-			this.broadcast(report, ctx);
+		// 2. Singleflight deduplication: reuse pending request if already in flight
+		const existingPromise = this.inFlight.get(adapter.id);
+		if (existingPromise) {
+			const report = await existingPromise;
+			if (report) this.broadcast(report, ctx);
 			return report;
-		} catch (error) {
-			// Silent fallback: do not interrupt agent execution
-			return undefined;
-		} finally {
-			cleanup();
 		}
+
+		// 3. Execute network fetch with 8-second timeout linked to scheduler lifecycle
+		if (!this.activeAbortController || this.activeAbortController.signal.aborted) {
+			this.activeAbortController = new AbortController();
+		}
+		const { signal, cleanup } = createTimeoutSignal(8000, this.activeAbortController.signal);
+
+		const fetchPromise = (async () => {
+			try {
+				const report = await adapter.fetchQuota(ctx, signal);
+				this.cache.set(adapter.id, {
+					report,
+					expiresAt: Date.now() + this.cacheTtlMs,
+				});
+				this.broadcast(report, ctx);
+				return report;
+			} catch {
+				// Silent fallback: do not interrupt agent execution
+				return undefined;
+			} finally {
+				cleanup();
+				this.inFlight.delete(adapter.id);
+			}
+		})();
+
+		this.inFlight.set(adapter.id, fetchPromise);
+		return fetchPromise;
 	}
 
 	/** Broadcast standard status event to session-ui statusline */

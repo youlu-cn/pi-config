@@ -190,16 +190,25 @@ if [[ -d "${HARNESS_DIR}/plugin-configs" ]]; then
   for pdir in "${HARNESS_DIR}/plugin-configs"/*; do
     if [[ -d "${pdir}" && -f "${pdir}/config.json" ]]; then
       pname="$(basename "${pdir}")"
-      if [[ "${pname}" == "session-ui" ]]; then
-        # 如果已纳管 extensions/session-ui 目录，配置已内嵌链接至该插件目录
-        if [[ -d "${HARNESS_DIR}/extensions/session-ui" ]]; then
-          echo "  [OK] session-ui config is managed inside extensions/session-ui"
-          continue
+      if [[ "${pname}" == "session-ui" || "${pname}" == "repo-cache-manager" ]]; then
+        # 如果已纳管 extensions/${pname} 目录，在 symlink 模式下内部软链接自然生效；
+        # 在 copy 模式下，需要将真实配置文件覆盖复制到目标插件目录中，防止相对软链接断裂
+        if [[ -d "${HARNESS_DIR}/extensions/${pname}" ]]; then
+          if [[ "${MODE}" == "copy" ]]; then
+            deploy_file "${pdir}/config.json" "${TARGET_DIR}/extensions/${pname}/config.json"
+          else
+            echo "  [OK] ${pname} config is linked inside extensions/${pname}"
+          fi
+        else
+          if [[ "${DRY_RUN}" == false ]]; then
+            mkdir -p "${TARGET_DIR}/extensions/${pname}"
+          fi
+          deploy_file "${pdir}/config.json" "${TARGET_DIR}/extensions/${pname}/config.json"
         fi
-        if [[ "${DRY_RUN}" == false ]]; then
-          mkdir -p "${TARGET_DIR}/extensions/session-ui"
+        # 对于 repo-cache-manager，额外在根目录提供一份方便直接编辑的链接/副本
+        if [[ "${pname}" == "repo-cache-manager" ]]; then
+          deploy_file "${pdir}/config.json" "${TARGET_DIR}/${pname}.json"
         fi
-        deploy_file "${pdir}/config.json" "${TARGET_DIR}/extensions/session-ui/config.json"
       else
         deploy_file "${pdir}/config.json" "${TARGET_DIR}/${pname}.json"
       fi

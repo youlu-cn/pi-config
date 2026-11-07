@@ -1,6 +1,6 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { DEFAULT_CONFIG, type RepoCacheManagerConfig } from "../config.ts";
-import { getGitHead, runGitCmd, saveScanCache, type ScanCacheData } from "../scan-cache.ts";
+import { getGitHead, runGitArgs, saveScanCache, type ScanCacheData } from "../scan-cache.ts";
 import { runIsolatedSubagent } from "./subagent-runner.ts";
 
 export interface ScoutParams {
@@ -15,6 +15,9 @@ export interface ScoutResult {
 	gitHead: string;
 	error?: string;
 }
+
+/** Singleflight map keyed by workspace cwd to deduplicate concurrent scout runs */
+const inFlightScouts = new Map<string, Promise<ScoutResult>>();
 
 export function parseModelSpec(spec: string): { provider: string; model: string } {
 	const parts = spec.split("/");
@@ -33,12 +36,37 @@ export function extractRepoSummary(text: string, maxChars = 8000): string {
 }
 
 /**
- * Run Scout Subagent (isolated ephemeral subagent process with read-only tools)
+ * Run Scout Subagent with singleflight deduplication per workspace cwd.
  */
 export async function runScoutTask(
 	params: ScoutParams,
 	ctx: ExtensionContext,
 	config: RepoCacheManagerConfig = DEFAULT_CONFIG,
+	signal?: AbortSignal,
+): Promise<ScoutResult> {
+	const key = ctx.cwd;
+	const existing = inFlightScouts.get(key);
+	if (existing && (!params.focusPaths || params.focusPaths.length === 0)) {
+		return existing;
+	}
+
+	const taskPromise = executeScoutInternal(params, ctx, config, signal).finally(() => {
+		if (inFlightScouts.get(key) === taskPromise) {
+			inFlightScouts.delete(key);
+		}
+	});
+
+	if (!params.focusPaths || params.focusPaths.length === 0) {
+		inFlightScouts.set(key, taskPromise);
+	}
+
+	return taskPromise;
+}
+
+async function executeScoutInternal(
+	params: ScoutParams,
+	ctx: ExtensionContext,
+	config: RepoCacheManagerConfig,
 	signal?: AbortSignal,
 ): Promise<ScoutResult> {
 	const gitHead = getGitHead(ctx.cwd) || "unversioned";
@@ -47,9 +75,9 @@ export async function runScoutTask(
 	const maxSummaryChars = maxSummaryTokens * 4;
 
 	// Prepare read-only git context and file skeleton for rapid subagent orientation
-	const gitStatusShort = runGitCmd(ctx.cwd, "status --short") || "(clean)";
-	const gitRecentLogs = runGitCmd(ctx.cwd, "log -n 5 --oneline") || "(no commits)";
-	const rawFiles = runGitCmd(ctx.cwd, "ls-files");
+	const gitStatusShort = runGitArgs(ctx.cwd, ["status", "--short"]) || "(clean)";
+	const gitRecentLogs = runGitArgs(ctx.cwd, ["log", "-n", "5", "--oneline"]) || "(no commits)";
+	const rawFiles = runGitArgs(ctx.cwd, ["ls-files"]);
 	const fileTree = rawFiles
 		? rawFiles.split("\n").filter(Boolean).slice(0, 150).join("\n")
 		: gitStatusShort;
