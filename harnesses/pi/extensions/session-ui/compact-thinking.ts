@@ -21,6 +21,7 @@ import {
 	wrapTextWithAnsi,
 	type Component,
 } from "@earendil-works/pi-tui";
+import { animateDots } from "./compact-thinking-anim.ts";
 
 export interface CompactThinkingConfig {
 	enabled: boolean;
@@ -80,10 +81,6 @@ function formatThoughtDuration(ms: number): string {
 function styleThinking(text: string, theme: Theme | undefined): string {
 	if (!theme) return text;
 	return theme.italic(theme.fg("thinkingText", text));
-}
-
-function animateDots(frame: number): string {
-	return ".".repeat((frame % 3) + 1);
 }
 
 const expandedThinking = new Set<string>();
