@@ -33,7 +33,7 @@
 - **手动切换模型**：当检测到跨模型切换时，仅将切换模型前累积的巨型 `role === "toolResult"` 原始文件读取输出替换为简短占位符（头部已有 2K 架构摘要），防止新模型（如 Argon / Opus）触发数万 Token 的全价重算。
 
 ### 4. 全链路缓存遥测（Telemetry）
-在 `before_agent_start` → `context` → `before_provider_request` → `message_update` / `message_end` → `turn_end` 采集 5 类指标；**每轮结束默认输出**【单轮缓存审计卡片】（`ctx.ui.notify` + 不计入 LLM 上下文的 `repo-cache-audit` entry）：
+在 `before_agent_start` → `context` → `before_provider_request` → `message_update` / `message_end` → `turn_end` 采集 5 类指标；**每轮结束默认输出**【单轮缓存审计卡片】（不计入 LLM 上下文的 `repo-cache-audit` session entry，TUI 可展开）：
 
 1. **注入与前缀指纹**：`repoCacheStatus`、`sysPromptHash`（变化标 `⚠️ SYS_MUTATED`）、`prefixLocked`（`🔒 LOCKED` / `💥 BUSTED at msg[i]`）
 2. **本地脱水效果**：`rawEstTokens` vs `sentEstTokens`、`omittedTools` 与节省比例
@@ -43,7 +43,7 @@
 
 未用到本地/云端缓存时，卡片 `notes` 段会明确提示（如 unindexed、cacheRead=0、prefix busted、本轮未脱水等）。
 
-`triggers` 仍会标注关键事件（重度模型 / 大量脱水 / 云端命中率跌破 50%），但默认不依赖触发条件才显示。设 `telemetryAlwaysShow: false` 可改回仅触发时弹出。
+`triggers` 仍会标注关键事件（重度模型 / 大量脱水 / 云端命中率跌破 50%），但默认不依赖触发条件才显示。设 `telemetryAlwaysShow: false` 可改回仅触发时写入卡片。
 
 相关配置项：`telemetryEnabled`、`telemetryHeavyModelPattern`、`telemetryDehydrationNotifyRatio`、`telemetryCacheBustHitRateFloor`、`telemetryAlwaysShow`（默认 `true`）。
 

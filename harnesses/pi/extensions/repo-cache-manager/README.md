@@ -33,7 +33,7 @@ Compares workspace `.pi/scan-cache.json` with `git rev-parse HEAD` and dirty fil
 - **Manual Model Switch**: When switching to a different model (e.g., Argon or Opus), prunes bulky historical `role === "toolResult"` file read outputs into concise placeholders, preventing re-computation costs.
 
 ### 4. Full-Chain Cache Telemetry
-Collects five metric groups across `before_agent_start` → `context` → `before_provider_request` → `message_update` / `message_end` → `turn_end`, and **emits a Cache Audit card every turn by default** (`ctx.ui.notify` + non-LLM `repo-cache-audit` entry):
+Collects five metric groups across `before_agent_start` → `context` → `before_provider_request` → `message_update` / `message_end` → `turn_end`, and **emits a Cache Audit card every turn by default** (non-LLM `repo-cache-audit` session entry; expandable in the TUI):
 
 1. **Prefix & Injection** — `repoCacheStatus`, `sysPromptHash` (`⚠️ SYS_MUTATED` on change), `prefixLocked` (`🔒 LOCKED` / `💥 BUSTED at msg[i]`)
 2. **Local Dehydration** — `rawEstTokens` vs `sentEstTokens`, `omittedTools`, saved-token ratio
@@ -43,7 +43,7 @@ Collects five metric groups across `before_agent_start` → `context` → `befor
 
 When local/cloud cache was unused, the card `notes` section calls it out (unindexed, cacheRead=0, prefix busted, no dehydration, etc.).
 
-`triggers` still tag heavy models / large dehydration / hit-rate drop below 50%, but display no longer depends on them. Set `telemetryAlwaysShow: false` for trigger-only notify.
+`triggers` still tag heavy models / large dehydration / hit-rate drop below 50%, but display no longer depends on them. Set `telemetryAlwaysShow: false` for trigger-only cards.
 
 Config keys: `telemetryEnabled`, `telemetryHeavyModelPattern`, `telemetryDehydrationNotifyRatio`, `telemetryCacheBustHitRateFloor`, `telemetryAlwaysShow` (default `true`).
 

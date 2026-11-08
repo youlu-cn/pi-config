@@ -11,7 +11,6 @@ import {
 	estimateMessagesTokens,
 	estimateTokensFromChars,
 	extractMessageText,
-	formatAuditCardText,
 	isHeavyModel,
 	shouldShowAuditCard,
 	type CacheAuditCard,
@@ -83,7 +82,7 @@ export default function repoCacheManagerExtension(pi: ExtensionAPI): void {
 		}
 	}
 
-	function emitAuditCard(ctx: ExtensionContext): void {
+	function emitAuditCard(): void {
 		const telCfg = toTelemetryConfig(config);
 		if (!telCfg.enabled) return;
 
@@ -91,20 +90,8 @@ export default function repoCacheManagerExtension(pi: ExtensionAPI): void {
 		if (!card) return;
 		if (!shouldShowAuditCard(card.triggers, telCfg)) return;
 
+		// Collapsed session entry only — avoid a duplicate ui.notify toast line.
 		pi.appendEntry<CacheAuditCard>(CACHE_AUDIT_ENTRY_TYPE, card);
-
-		if (ctx.hasUI) {
-			const level =
-				card.triggers.includes("cache_bust") || card.prefix.status === "busted"
-					? "warning"
-					: "info";
-			// Short toast only; full card lives in the collapsed session entry.
-			const hit =
-				card.cloudCacheHitRate != null
-					? `${(card.cloudCacheHitRate * 100).toFixed(0)}%`
-					: "?";
-			ctx.ui.notify(`Cache Audit ${card.prefix.label} hit=${hit}`, level);
-		}
 	}
 
 	pi.registerEntryRenderer<CacheAuditCard>(CACHE_AUDIT_ENTRY_TYPE, (entry, { expanded, keyText }, theme) => {
@@ -364,7 +351,7 @@ export default function repoCacheManagerExtension(pi: ExtensionAPI): void {
 		telemetry.recordContextUsage(ctx.getContextUsage?.());
 		telemetry.markComplete();
 		if (turnActive) {
-			emitAuditCard(ctx);
+			emitAuditCard();
 			telemetry.finishTurn();
 		}
 		turnActive = false;
@@ -418,7 +405,6 @@ export default function repoCacheManagerExtension(pi: ExtensionAPI): void {
 				return;
 			}
 			pi.appendEntry<CacheAuditCard>(CACHE_AUDIT_ENTRY_TYPE, card);
-			ctx.ui.notify(formatAuditCardText(card), "info");
 		},
 	});
 }
