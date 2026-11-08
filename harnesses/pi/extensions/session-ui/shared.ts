@@ -1,4 +1,5 @@
 import type { Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
+import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
 export interface TextResult {
 	content?: Array<{
@@ -39,6 +40,12 @@ export function formatTokens(value: number): string {
 	if (value < 1_000) return `${value}`;
 	if (value < 1_000_000) return `${(value / 1_000).toFixed(1)}k`;
 	return `${(value / 1_000_000).toFixed(2)}M`;
+}
+
+/** Pad (or truncate) a line to a fixed visible width. */
+export function padLine(text: string, width: number): string {
+	const truncated = truncateToWidth(text, width, "…");
+	return truncated + " ".repeat(Math.max(0, width - visibleWidth(truncated)));
 }
 
 export function statusColor(percent: number): ThemeColor {

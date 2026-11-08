@@ -2,7 +2,7 @@
 
 [English](./README.md) | [简体中文](./README.zh-CN.md)
 
-Pi terminal UI extension providing a single-line footer statusline, tool activity panel, work animation, compact clipboard image paste with preview, `/effort` switcher, turn duration, and automatic terminal title and session naming.
+Pi terminal UI extension providing a Claude-style startup header (gradient logo + keybinding tips), sticky fullscreen user-message header, Mermaid dialect rendering and circled-number normalization, a `/context` context-window breakdown panel, a single-line footer statusline, tool activity panel, work animation, compact clipboard image paste with preview, `/effort` switcher, turn duration, and automatic terminal title and session naming.
 
 ## Quick Start
 
@@ -20,6 +20,11 @@ Installs to `~/.pi/agent/extensions/session-ui/`. Restart Pi or run `/reload` to
 
 | Module | Command / Trigger | Description |
 | --- | --- | --- |
+| Startup header | Automatic | Official Pi gradient logo + dynamic keybinding tips + hero line (replaces the built-in startup header; narrow terminals stack logo + hero) |
+| Sticky user message | Automatic (fullscreen) | Pins the scrolled-off user prompt to the viewport top; click jumps back to that message |
+| Markdown enhance | Automatic | Extra Mermaid dialects (`sequenceDiagram`, `stateDiagram-v2`, …) via grok-mermaid; circled numbers `①–⑳` → `(1)–(20)`; multiline link whitespace cleanup |
+| Context breakdown | `/context` | Overlay of system / memory / skills / tools / results / conversation token share; ↑↓ select, Enter preview (c / Tab+Enter copy), Esc close; non-TUI falls back to notify |
+| Session / subagent references | `@` autocomplete | `@session:[…]` injects prior-session transcripts; `@subagent:[…]` suggests agent types and asks the model to delegate separately |
 | Claude tool cards | `/tool-style [on\|compact\|off\|status]` | Rich Diff (bars / split), consecutive tool grouping, click/`Ctrl+O` expand; `compact` keeps one-line summaries until expanded |
 | Special cards | Automatic | AskUserQuestion Q&A tree, Codemode nested-call tree, Subagent finished notification |
 | Agent Summary | Automatic | End-of-agent line `│ Ran 1 command, wrote 1 file · 15s` (non-LLM entry) |
@@ -58,10 +63,17 @@ Displayed items and order are controlled by `statusline.segments`:
 - Default path: `~/.pi/agent/extensions/session-ui/config.json` (repo source: [config.json](../../plugin-configs/session-ui/config.json))
 - Environment override: `PI_SESSION_UI_CONFIG=/absolute/path/to/session-ui.json pi`
 
-Run `/reload` after editing. All modules (`toolActivity`, `workAnimation`, `agentSummary`, `compactThinking`, `editorPrefix`, `aliases`, `specialCards`, `compactPaste`, `claudeToolStyle`, `statusline`, `effort`, `turnSummary`, `uiMeta`) are enabled by default and can be disabled with `enabled: false`:
+Run `/reload` after editing. All modules (`toolActivity`, `workAnimation`, `agentSummary`, `compactThinking`, `editorPrefix`, `aliases`, `specialCards`, `compactPaste`, `claudeToolStyle`, `statusline`, `effort`, `turnSummary`, `uiMeta`, `startupHeader`, `markdownEnhance`, `contextCommand`, `reference`, `stickyUserMessage`) are enabled by default and can be disabled with `enabled: false`:
 
 | Option | Default | Allowed Values / Range |
 | --- | --- | --- |
+| `startupHeader.enabled` | `true` | Gradient logo + tips startup header |
+| `stickyUserMessage.enabled` | `true` | Pin scrolled-off user message at fullscreen viewport top |
+| `markdownEnhance.enabled` | `true` | Mermaid dialects + circled-number normalization |
+| `contextCommand.enabled` | `true` | `/context` context-window breakdown panel |
+| `reference.enabled` | `true` | Master switch for `@session` / `@subagent` references |
+| `reference.sessionReference` | `true` | `@session:[…]` autocomplete + transcript injection |
+| `reference.subagentAutocomplete` | `true` | `@subagent:[…]` agent-type autocomplete + delegation hint |
 | `editorPrefix.enabled` | `true` | `❯` prompt prefix |
 | `aliases.enabled` | `true` | `/clear` and `/exit` aliases |
 | `specialCards.enabled` | `true` | AskUser / Codemode / Subagent cards |

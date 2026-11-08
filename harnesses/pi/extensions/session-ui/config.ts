@@ -102,6 +102,31 @@ export interface SessionUiConfig {
 			maxLength: number;
 		};
 	};
+	/** Claude-style startup header (gradient logo + keybinding tips + hero). */
+	startupHeader: {
+		enabled: boolean;
+	};
+	/** Mermaid dialect fences + circled-number normalization. */
+	markdownEnhance: {
+		enabled: boolean;
+	};
+	/** /context context-window breakdown panel (keyboard MVP). */
+	contextCommand: {
+		enabled: boolean;
+	};
+	/** @session:[…] / @subagent:[…] references + autocomplete. */
+	reference: {
+		/** Master switch for both session refs and subagent autocomplete. */
+		enabled: boolean;
+		/** Inject prior-session transcripts via @session:[…]. */
+		sessionReference: boolean;
+		/** Suggest agent types via @subagent:[…] and inject delegation hints. */
+		subagentAutocomplete: boolean;
+	};
+	/** Pin scrolled-off user message to the fullscreen viewport top. */
+	stickyUserMessage: {
+		enabled: boolean;
+	};
 }
 
 export const DEFAULT_SESSION_UI_CONFIG: SessionUiConfig = {
@@ -199,6 +224,23 @@ export const DEFAULT_SESSION_UI_CONFIG: SessionUiConfig = {
 			maxLength: 48,
 		},
 	},
+	startupHeader: {
+		enabled: true,
+	},
+	markdownEnhance: {
+		enabled: true,
+	},
+	contextCommand: {
+		enabled: true,
+	},
+	reference: {
+		enabled: true,
+		sessionReference: true,
+		subagentAutocomplete: true,
+	},
+	stickyUserMessage: {
+		enabled: true,
+	},
 };
 
 type JsonObject = Record<string, unknown>;
@@ -294,6 +336,15 @@ function parseConfig(raw: unknown, warnings: string[]): SessionUiConfig {
 	const uiMetaTitle = objectValue(uiMeta.title, "uiMeta.title", warnings);
 	const uiMetaSessionName = objectValue(
 		uiMeta.sessionName, "uiMeta.sessionName", warnings,
+	);
+	const startupHeader = objectValue(raw.startupHeader, "startupHeader", warnings);
+	const markdownEnhance = objectValue(raw.markdownEnhance, "markdownEnhance", warnings);
+	const contextCommand = objectValue(raw.contextCommand, "contextCommand", warnings);
+	const reference = objectValue(raw.reference, "reference", warnings);
+	const stickyUserMessage = objectValue(
+		raw.stickyUserMessage,
+		"stickyUserMessage",
+		warnings,
 	);
 
 	let placement = DEFAULT_SESSION_UI_CONFIG.toolActivity.placement;
@@ -697,6 +748,58 @@ function parseConfig(raw: unknown, warnings: string[]): SessionUiConfig {
 					warnings,
 				),
 			},
+		},
+		startupHeader: {
+			enabled: booleanValue(
+				startupHeader.enabled,
+				DEFAULT_SESSION_UI_CONFIG.startupHeader.enabled,
+				"startupHeader.enabled",
+				warnings,
+			),
+		},
+		markdownEnhance: {
+			enabled: booleanValue(
+				markdownEnhance.enabled,
+				DEFAULT_SESSION_UI_CONFIG.markdownEnhance.enabled,
+				"markdownEnhance.enabled",
+				warnings,
+			),
+		},
+		contextCommand: {
+			enabled: booleanValue(
+				contextCommand.enabled,
+				DEFAULT_SESSION_UI_CONFIG.contextCommand.enabled,
+				"contextCommand.enabled",
+				warnings,
+			),
+		},
+		reference: {
+			enabled: booleanValue(
+				reference.enabled,
+				DEFAULT_SESSION_UI_CONFIG.reference.enabled,
+				"reference.enabled",
+				warnings,
+			),
+			sessionReference: booleanValue(
+				reference.sessionReference,
+				DEFAULT_SESSION_UI_CONFIG.reference.sessionReference,
+				"reference.sessionReference",
+				warnings,
+			),
+			subagentAutocomplete: booleanValue(
+				reference.subagentAutocomplete,
+				DEFAULT_SESSION_UI_CONFIG.reference.subagentAutocomplete,
+				"reference.subagentAutocomplete",
+				warnings,
+			),
+		},
+		stickyUserMessage: {
+			enabled: booleanValue(
+				stickyUserMessage.enabled,
+				DEFAULT_SESSION_UI_CONFIG.stickyUserMessage.enabled,
+				"stickyUserMessage.enabled",
+				warnings,
+			),
 		},
 	};
 }

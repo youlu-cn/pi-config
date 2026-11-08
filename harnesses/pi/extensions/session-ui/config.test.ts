@@ -59,7 +59,7 @@ test("reports malformed JSON and unreadable config paths", () => {
 test("warns on invalid roots and every explicitly invalid config section", () => {
 	for (const raw of [null, [], false, "invalid", 3]) {
 		assert.deepEqual(withConfig(raw).warnings, ["config root must be an object"]);
-		for (const key of ["toolActivity", "workAnimation", "compactPaste", "statusline", "effort", "turnDuration", "uiMeta"]) {
+		for (const key of ["toolActivity", "workAnimation", "compactPaste", "statusline", "effort", "turnDuration", "uiMeta", "startupHeader", "markdownEnhance", "contextCommand", "reference", "stickyUserMessage"]) {
 			const result = withConfig({ [key]: raw });
 			assert.deepEqual(result.warnings, [`${key} must be an object`]);
 			assert.deepEqual(result.config, DEFAULT_SESSION_UI_CONFIG);
@@ -150,6 +150,15 @@ test("loads agentSummary, compactThinking, and workAnimation stats options", () 
 		editorPrefix: { enabled: false },
 		aliases: { enabled: false },
 		specialCards: { enabled: false },
+		startupHeader: { enabled: false },
+		markdownEnhance: { enabled: false },
+		contextCommand: { enabled: false },
+		reference: {
+			enabled: false,
+			sessionReference: false,
+			subagentAutocomplete: false,
+		},
+		stickyUserMessage: { enabled: false },
 	});
 	assert.equal(result.config.workAnimation.showStats, false);
 	assert.equal(result.config.workAnimation.showTtft, false);
@@ -161,6 +170,24 @@ test("loads agentSummary, compactThinking, and workAnimation stats options", () 
 	assert.equal(result.config.editorPrefix.enabled, false);
 	assert.equal(result.config.aliases.enabled, false);
 	assert.equal(result.config.specialCards.enabled, false);
+	assert.equal(result.config.startupHeader.enabled, false);
+	assert.equal(result.config.markdownEnhance.enabled, false);
+	assert.equal(result.config.contextCommand.enabled, false);
+	assert.deepEqual(result.config.reference, {
+		enabled: false,
+		sessionReference: false,
+		subagentAutocomplete: false,
+	});
+	assert.equal(result.config.stickyUserMessage.enabled, false);
+	assert.deepEqual(withConfig({}).config.startupHeader, { enabled: true });
+	assert.deepEqual(withConfig({}).config.markdownEnhance, { enabled: true });
+	assert.deepEqual(withConfig({}).config.contextCommand, { enabled: true });
+	assert.deepEqual(withConfig({}).config.reference, {
+		enabled: true,
+		sessionReference: true,
+		subagentAutocomplete: true,
+	});
+	assert.deepEqual(withConfig({}).config.stickyUserMessage, { enabled: true });
 });
 
 test("loads claudeToolStyle mode, grouping, and diff options", () => {

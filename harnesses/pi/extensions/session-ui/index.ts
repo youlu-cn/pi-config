@@ -13,6 +13,7 @@
  * Commands:
  *   /effort [level|status]
  *   /statusline
+ *   /context
  *   /work-animation [on|off|status]
  *   /tool-style [on|compact|off|status]
  *   /clear · /exit
@@ -26,30 +27,61 @@ import { registerCompactPasteEditor } from "./compact-paste.ts";
 import { registerClaudeToolRenderer } from "./claude-tool-renderer.ts";
 import { installCompactThinking } from "./compact-thinking.ts";
 import { loadSessionUiConfig } from "./config.ts";
+import { registerContextCommand } from "./context.ts";
 import { registerEffort } from "./effort.ts";
 import { registerPromptEditor } from "./prompt-editor.ts";
 import { registerSpecialCards } from "./special-cards.ts";
 import { registerStatusline } from "./statusline.ts";
 import { registerSessionTitleController } from "./title-controller.ts";
+import {
+	installEarlyStartupHeader,
+	registerStartupHeader,
+} from "./startup-header.ts";
 import { registerToolActivity } from "./tool-activity.ts";
 import { registerTurnSummary } from "./turn-summary.ts";
-import { registerUiMeta } from "./ui-meta.ts";
+import { createMarkdownEnhanceTransform } from "./markdown-enhance.ts";
+import { registerReference } from "./reference.ts";
+import { registerStickyUserMessage } from "./sticky-user-message.ts";
+import {
+	createUiMetaMarkdownTransform,
+	registerUiMeta,
+} from "./ui-meta.ts";
 import { registerWorkAnimation } from "./work-animation.ts";
+import type { MarkdownTransformer } from "@earendil-works/pi-coding-agent";
 
 export default function sessionUi(pi: ExtensionAPI): void {
 	const loaded = loadSessionUiConfig();
 	const { config } = loaded;
+	// Patch InteractiveMode.init before session_start so the first paint is ours.
+	installEarlyStartupHeader(() => config.startupHeader.enabled);
+	registerStartupHeader(pi, () => config.startupHeader.enabled);
+	// Sticky markers/frame patches install at register time for first fullscreen paint.
+	if (config.stickyUserMessage.enabled) {
+		registerStickyUserMessage(pi, () => config.stickyUserMessage.enabled);
+	}
 	const titleController = registerSessionTitleController(pi);
 
 	if (config.turnSummary.enabled) registerTurnSummary(pi, config.turnSummary);
 	if (config.agentSummary.enabled) {
 		registerAgentSummary(pi, config.agentSummary);
 	}
-	if (
+	const uiMetaActive =
 		config.uiMeta.enabled &&
-		(config.uiMeta.title.enabled || config.uiMeta.sessionName.enabled)
-	) {
+		(config.uiMeta.title.enabled || config.uiMeta.sessionName.enabled);
+	if (uiMetaActive) {
 		registerUiMeta(pi, config.uiMeta, titleController);
+	}
+
+	// One markdownTransformer slot per extension — chain ui-meta strip then enhance.
+	const markdownPipeline: MarkdownTransformer[] = [];
+	if (uiMetaActive) markdownPipeline.push(createUiMetaMarkdownTransform());
+	if (config.markdownEnhance.enabled) {
+		markdownPipeline.push(createMarkdownEnhanceTransform());
+	}
+	if (markdownPipeline.length > 0) {
+		pi.registerMarkdownTransformer((markdown, context) =>
+			markdownPipeline.reduce((acc, transform) => transform(acc, context), markdown),
+		);
 	}
 	const workAnimController = registerWorkAnimation(
 		pi,
@@ -97,6 +129,8 @@ export default function sessionUi(pi: ExtensionAPI): void {
 	}
 	if (config.statusline.enabled) registerStatusline(pi, config.statusline);
 	if (config.effort.enabled) registerEffort(pi);
+	if (config.contextCommand.enabled) registerContextCommand(pi);
+	if (config.reference.enabled) registerReference(pi, config.reference);
 
 	if (loaded.warnings.length > 0) {
 		let notified = false;

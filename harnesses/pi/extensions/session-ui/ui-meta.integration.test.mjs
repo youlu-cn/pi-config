@@ -6,13 +6,13 @@ import { DEFAULT_SESSION_UI_CONFIG } from "./config.ts";
 import { UI_META_SENTINEL } from "./ui-meta-core.ts";
 
 const root = process.env.PI_PACKAGE_ROOT;
-let registerUiMeta, ExtensionRunner, AgentSession, buildSystemPromptSections, diffSystemPromptSections;
+let registerUiMeta, createUiMetaMarkdownTransform, ExtensionRunner, AgentSession, buildSystemPromptSections, diffSystemPromptSections;
 if (root) {
 	const load = (path) => import(pathToFileURL(resolve(root, path)).href);
 	({ ExtensionRunner } = await load("dist/core/extensions/runner.js"));
 	({ AgentSession } = await load("dist/core/agent-session.js"));
 	({ buildSystemPromptSections, diffSystemPromptSections } = await load("dist/core/system-prompt.js"));
-	({ registerUiMeta } = await import("./ui-meta.ts"));
+	({ registerUiMeta, createUiMetaMarkdownTransform } = await import("./ui-meta.ts"));
 }
 const options = { skip: !root };
 const meta = (record) => `${UI_META_SENTINEL}${JSON.stringify({ v: 1, ...record })}`;
@@ -25,7 +25,8 @@ const customMessage = () => ({ role: "custom", customType: "web-search-content-r
 function harness({ entries = [], config = DEFAULT_SESSION_UI_CONFIG.uiMeta, name, mode = "tui" } = {}) {
 	const handlers = new Map();
 	const titles = [], working = [];
-	let markdown;
+	// Markdown strip is composed in index.ts; exercise the exported transform directly.
+	const markdown = createUiMetaMarkdownTransform();
 	let branch = structuredClone(entries);
 	let sessionName = name;
 	const ctx = {
@@ -41,7 +42,7 @@ function harness({ entries = [], config = DEFAULT_SESSION_UI_CONFIG.uiMeta, name
 		getSessionName: () => sessionName,
 		setSessionName: rename,
 		registerEntryRenderer: () => assert.fail("Title metadata must not register transcript renderers"),
-		registerMarkdownTransformer: (transform) => { markdown = transform; },
+		registerMarkdownTransformer: () => assert.fail("ui-meta must not own the markdownTransformer slot"),
 	}, config, { setTaskTitle: (title) => titles.push(title), setWorking: (value) => working.push(value) });
 	const raw = (text, stopReason = "stop", toolCalls = false, event = "message_end") => emit(event, {
 		message: { role: "assistant", stopReason, content: [

@@ -2,7 +2,7 @@
 
 [English](./README.md) | [简体中文](./README.zh-CN.md)
 
-Pi 终端界面扩展：底部单行状态栏、工具调用面板、工作动画、剪贴板图片紧凑粘贴与预览、`/effort` 档位切换、回合耗时，以及自动标题与会话命名。
+Pi 终端界面扩展：Claude 风格启动头（渐变 logo + 快捷键提示）、fullscreen 粘性用户消息头、Mermaid 方言渲染与圈数字规范化、`/context` 上下文占用拆分面板、底部单行状态栏、工具调用面板、工作动画、剪贴板图片紧凑粘贴与预览、`/effort` 档位切换、回合耗时，以及自动标题与会话命名。
 
 ## 快速开始
 
@@ -20,6 +20,11 @@ Pi 终端界面扩展：底部单行状态栏、工具调用面板、工作动�
 
 | 模块 | 命令 / 交互 | 说明 |
 | --- | --- | --- |
+| 启动头 | 自动显示 | 官方 Pi 渐变 logo + 动态快捷键提示 + hero 文案（替换内置启动头；窄屏时上下堆叠 logo 与 hero） |
+| 粘性用户消息 | 自动（fullscreen） | 用户消息滚出视口上沿后钉在顶部；单击跳回该消息 |
+| Markdown 增强 | 自动 | 额外 Mermaid 方言（`sequenceDiagram`、`stateDiagram-v2` 等，经 grok-mermaid）；圈数字 `①–⑳` → `(1)–(20)`；跨行链接空白规整 |
+| 上下文拆分 | `/context` | 系统提示 / Memory / Skills / 工具定义 / 工具结果 / 对话 token 占用浮层；↑↓ 选择、Enter 预览（c / Tab+Enter 复制）、Esc 关闭；非 TUI 回退为 notify |
+| 会话 / 子代理引用 | `@` 补全 | `@session:[…]` 注入历史会话转录；`@subagent:[…]` 提示子代理类型并要求分别委派 |
 | Claude 工具卡 | `/tool-style [on\|compact\|off\|status]` | Rich Diff（bars/分栏）、连续工具分组、单击/`Ctrl+O` 展开；`compact` 折叠时只留一行摘要 |
 | 专用工具卡 | 自动显示 | AskUserQuestion Q&A 树、Codemode 嵌套调用树、Subagent 完成通知 |
 | Agent Summary | 自动显示 | 回合结束追加 `│ Ran 1 command, wrote 1 file · 15s`（不进 LLM 上下文） |
@@ -58,10 +63,17 @@ Pi 终端界面扩展：底部单行状态栏、工具调用面板、工作动�
 - 默认路径：`~/.pi/agent/extensions/session-ui/config.json`（仓库源：[config.json](../../plugin-configs/session-ui/config.json)）
 - 环境变量覆盖：`PI_SESSION_UI_CONFIG=/absolute/path/to/session-ui.json pi`
 
-修改后 `/reload` 生效。各模块（`toolActivity`、`workAnimation`、`agentSummary`、`compactThinking`、`editorPrefix`、`aliases`、`specialCards`、`compactPaste`、`claudeToolStyle`、`statusline`、`effort`、`turnSummary`、`uiMeta`）均默认开启，可设 `enabled: false` 关闭：
+修改后 `/reload` 生效。各模块（`toolActivity`、`workAnimation`、`agentSummary`、`compactThinking`、`editorPrefix`、`aliases`、`specialCards`、`compactPaste`、`claudeToolStyle`、`statusline`、`effort`、`turnSummary`、`uiMeta`、`startupHeader`、`markdownEnhance`、`contextCommand`、`reference`、`stickyUserMessage`）均默认开启，可设 `enabled: false` 关闭：
 
 | 配置项 | 默认值 | 可选值 / 范围 |
 | --- | --- | --- |
+| `startupHeader.enabled` | `true` | 渐变 logo + 快捷键提示启动头 |
+| `stickyUserMessage.enabled` | `true` | fullscreen 下将滚出上沿的用户消息钉在视口顶部 |
+| `markdownEnhance.enabled` | `true` | Mermaid 方言 + 圈数字规范化 |
+| `contextCommand.enabled` | `true` | `/context` 上下文占用拆分面板 |
+| `reference.enabled` | `true` | `@session` / `@subagent` 引用总开关 |
+| `reference.sessionReference` | `true` | `@session:[…]` 补全 + 会话转录注入 |
+| `reference.subagentAutocomplete` | `true` | `@subagent:[…]` 子代理类型补全 + 委派提示 |
 | `editorPrefix.enabled` | `true` | 输入框 `❯` 前缀 |
 | `aliases.enabled` | `true` | `/clear`、`/exit` 别名 |
 | `specialCards.enabled` | `true` | AskUser / Codemode / Subagent 专用卡 |

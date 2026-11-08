@@ -51,5 +51,22 @@
       "cache",
       "extensions"
     ]
+  },
+  "startupHeader": {
+    "enabled": true
+  },
+  "markdownEnhance": {
+    "enabled": true
+  },
+  "contextCommand": {
+    "enabled": true
+  },
+  "reference": {
+    "enabled": true,
+    "sessionReference": true,
+    "subagentAutocomplete": true
+  },
+  "stickyUserMessage": {
+    "enabled": true
   }
 }

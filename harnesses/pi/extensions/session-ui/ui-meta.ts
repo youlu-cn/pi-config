@@ -1,6 +1,7 @@
 import type {
 	ExtensionAPI,
 	ExtensionContext,
+	MarkdownTransformer,
 } from "@earendil-works/pi-coding-agent";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
@@ -83,6 +84,14 @@ ${config.sessionName.enabled
 Put records on their own physical lines, with no XML tags, closing marker, code fences or explanation. Use the latest real user's language and no trailing punctuation. Exclude secrets, credentials, full paths and terminal control characters. Do not repeat start metadata after tool results. Metadata must not alter, delay or replace the normal answer.`;
 }
 
+/** Strip ui-meta protocol lines from assistant markdown (compose in index). */
+export function createUiMetaMarkdownTransform(): MarkdownTransformer {
+	return (markdown, context) => {
+		if (context.messageType !== "assistant") return markdown;
+		return stripUiMetaBlocks(markdown, context.isStreaming);
+	};
+}
+
 export function registerUiMeta(
 	pi: ExtensionAPI,
 	config: UiMetaConfig,
@@ -151,10 +160,7 @@ export function registerUiMeta(
 		}
 	};
 
-	pi.registerMarkdownTransformer((markdown, context) => {
-		if (context.messageType !== "assistant") return markdown;
-		return stripUiMetaBlocks(markdown, context.isStreaming);
-	});
+	// Markdown strip is composed in index.ts with markdown-enhance (one slot per extension).
 
 	pi.on("session_start", (_event, ctx) => {
 		enabledForSession = ctx.mode === "tui" && config.enabled && startMetadataEnabled;
