@@ -1,10 +1,41 @@
 import assert from "node:assert/strict";
+import { createRequire } from "node:module";
 import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
 import { collectStats } from "./statusline-usage.ts";
 
 const root = process.env.PI_PACKAGE_ROOT;
+test("rolling GPT and hourly Gemini use the same clock icon, separate from reset", { skip: !root }, async () => {
+	const require = createRequire(resolve(root, "package.json"));
+	const { createJiti } = require("jiti");
+	const jiti = createJiti(import.meta.url, {
+		moduleCache: false, fsCache: false,
+		alias: { "@earendil-works/pi-tui": require.resolve("@earendil-works/pi-tui") },
+	});
+	const { registerStatusline } = await jiti.import(fileURLToPath(new URL("./statusline.ts", import.meta.url)));
+	const events = new Map();
+	const hooks = new Map();
+	let footer;
+	const theme = { fg: (_color, value) => value, bold: (value) => value };
+	const pi = {
+		events: { on: (name, handler) => events.set(name, handler) },
+		on: (name, handler) => hooks.set(name, handler), registerCommand() {},
+	};
+	registerStatusline(pi, { segments: ["usage"], overflow: "priority", extensionStatuses: { exclude: [] } });
+	hooks.get("session_start")({}, {
+		hasUI: true, mode: "tui", sessionManager: { getEntries: () => [] },
+		ui: { setFooter: (factory) => { footer = factory({ requestRender() {} }, theme, { onBranchChange: () => () => {} }); } },
+	});
+	for (const [kind, label] of [["rolling", "GPT 5h"], ["hourly", "Gemini 5h"]]) {
+		events.get("subscription-usage/status/v1")({
+			v: 1, status: "ready", providerId: "test", capturedAt: Date.now(),
+			windows: [{ kind, label, remainingPercent: 80, resetCountdown: "2h" }],
+		});
+		assert.equal(footer.render(100)[0], `\uF017 ${label} 80% ↻2h`);
+		assert.equal(footer.render(label.length + 6)[0], `\uF017 ${label} 80%`);
+	}
+});
 test("read-only projection agrees with installed Pi native footer", { skip: !root }, async () => {
 	// Internal modules are test oracles only, never extension runtime dependencies.
 	const load = (path) => import(pathToFileURL(resolve(root, path)).href);

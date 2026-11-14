@@ -5,7 +5,7 @@ A Pi extension built on **Subagent Physical Isolation + Workspace Scan Cache Mou
 ## Core Principles
 - **Strictly No `setModel()`**: The extension never mutates or intercepts your active session model. The primary session retains your manually chosen model 100% of the time, preserving server-side KV Cache hit rates.
 - **Physical Isolation & Ephemeral Subagents**: Workspace scanning (`scout`) and architecture planning (`architect`) run inside isolated child processes with sandboxed read-only permissions and are stopped immediately upon completion.
-- **On-Demand Mounting & Cross-Model Protection**: By default the architecture summary is injected only on heavy-model turns (Argon/Opus/…); light-model turns pay no summary tax. Bulky tool outputs are still dehydrated on manual model switches.
+- **On-Demand Mounting & Cross-Model Protection**: By default the architecture summary is injected only on heavy-model turns (Argon/Carbon/Astra/Fable); light-model turns pay no summary tax. Bulky tool outputs are still dehydrated on manual model switches.
 
 ---
 

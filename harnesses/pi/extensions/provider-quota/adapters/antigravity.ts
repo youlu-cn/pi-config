@@ -7,6 +7,18 @@ export const ANTIGRAVITY_GEMINI_MODELS = "gemini-models";
 export const ANTIGRAVITY_ARGON_MODELS = "gemini-argon";
 export const ANTIGRAVITY_3P_MODELS = "claude-and-gpt-models";
 
+const ARGON_MODEL_KEYS = ["argon", "gemini-4-argon"];
+const HYDROGEN_MODEL_KEYS = ["hydrogen", "gemini-4-hydrogen"];
+const GEMINI_MODEL_KEYS = [
+	...HYDROGEN_MODEL_KEYS, "gemini-flash", "gemini-pro", "gemini-3", "gemini-2", "gemini",
+];
+
+/** Pro has separate pools; Ultra tiers share the Gemini 4 pool. */
+export function hasSharedGemini4Pool(assistData: any): boolean {
+	const tier = assistData?.paidTier ?? assistData?.currentTier;
+	return /ultra/i.test(`${tier?.id ?? ""} ${tier?.name ?? ""}`);
+}
+
 const ANTIGRAVITY_HOSTS = [
 	"https://daily-cloudcode-pa.googleapis.com",
 	"https://daily-cloudcode-pa.sandbox.googleapis.com",
@@ -53,7 +65,7 @@ function parseWindowKind(windowStr?: string, bucketId?: string): QuotaWindowKind
 	const w = String(windowStr || "").toLowerCase();
 	const id = String(bucketId || "").toLowerCase();
 	if (w.includes("month") || id.includes("month") || w === "1m") return "monthly";
-	if (w.includes("week") || id.includes("week") || w === "1w") return "weekly";
+	if (w.includes("week") || id.includes("week") || w === "1w" || w === "7d" || w === "168h") return "weekly";
 	if (w.endsWith("h") || id.includes("h") || w.includes("hour")) return "hourly";
 	if (w.includes("day") || id.includes("day") || w === "1d") return "daily";
 	if (w.includes("roll")) return "rolling";
@@ -62,6 +74,7 @@ function parseWindowKind(windowStr?: string, bucketId?: string): QuotaWindowKind
 
 function parseWindowMinutes(windowStr?: string): number | undefined {
 	const w = String(windowStr || "").toLowerCase();
+	if (/^\d+d$/.test(w)) return parseInt(w, 10) * 1440;
 	if (w.endsWith("h")) return parseInt(w, 10) * 60;
 	if (w.includes("week") || w === "1w") return 10080;
 	if (w.includes("month") || w === "1m") return 43200;
@@ -117,9 +130,10 @@ export class AntigravityAdapter implements ProviderAdapter {
 			),
 		]);
 
+		const sharedGemini4Pool = hasSharedGemini4Pool(assistData);
 		let windows: QuotaWindow[] = [];
 		if (Array.isArray(quotaData?.groups) && quotaData.groups.length > 0) {
-			windows = buildAntigravityWindows(quotaData.groups, defaultResetsAt);
+			windows = buildAntigravityWindows(quotaData.groups, defaultResetsAt, sharedGemini4Pool);
 		}
 
 		// Free-tier accounts get 403 on retrieveUserQuotaSummary; fall back to
@@ -132,6 +146,7 @@ export class AntigravityAdapter implements ProviderAdapter {
 			windows = buildAntigravityModelFallbackWindows(
 				modelsData.models as Record<string, any>,
 				defaultResetsAt,
+				sharedGemini4Pool,
 			);
 		}
 
@@ -158,8 +173,12 @@ export class AntigravityAdapter implements ProviderAdapter {
 export function buildAntigravityWindows(
 	groups: any[],
 	defaultResetsAt: number,
+	sharedGemini4Pool = false,
 ): QuotaWindow[] {
 	const windows: QuotaWindow[] = [];
+	const hasArgonGroup = groups.some((group) =>
+		String(group?.displayName ?? "").toLowerCase().includes("argon"),
+	);
 
 	for (const group of groups) {
 		const displayName = typeof group?.displayName === "string" ? group.displayName : "";
@@ -173,18 +192,28 @@ export function buildAntigravityWindows(
 			: is3p
 				? ANTIGRAVITY_3P_MODELS
 				: ANTIGRAVITY_GEMINI_MODELS;
-		const groupPrefix = isArgon ? "Argon" : is3p ? "Claude" : "Gemini";
-		const modelKeys = isArgon
-			? ["argon", "gemini-4-argon", "gemini-4"]
-			: is3p
-				? ["claude", "gpt"]
-				: ["gemini-flash", "gemini-pro", "gemini-3", "gemini-2", "gemini"];
+		const groupPrefix = sharedGemini4Pool && (isArgon || (!is3p && !hasArgonGroup))
+			? "Gemini"
+			: isArgon ? "Argon" : is3p ? "Claude" : normName.includes("hydrogen") ? "Hydrogen" : "Gemini";
+		// Never match Argon by the broad `gemini-4` prefix: Hydrogen uses it too.
+		const isSharedGroup = sharedGemini4Pool && !is3p && (isArgon || !hasArgonGroup);
+		const modelKeys = isSharedGroup
+			? [...ARGON_MODEL_KEYS, ...(isArgon ? HYDROGEN_MODEL_KEYS : GEMINI_MODEL_KEYS)]
+			: isArgon
+				? ARGON_MODEL_KEYS
+				: is3p
+					? ["claude", "gpt"]
+					: GEMINI_MODEL_KEYS.filter((key) =>
+						!(sharedGemini4Pool && hasArgonGroup && HYDROGEN_MODEL_KEYS.includes(key)),
+					);
 
-		const groupLabel = isArgon
-			? "Gemini 4 Argon"
-			: is3p
-				? "Claude and GPT models"
-				: "Gemini Models";
+		const groupLabel = isSharedGroup
+			? "Gemini 4 Argon / Hydrogen"
+			: isArgon
+				? "Gemini 4 Argon"
+				: is3p
+					? "Claude and GPT models"
+					: "Gemini Models";
 
 		for (const b of buckets) {
 			// A bucket without a usable fraction carries no information: reporting it
@@ -211,7 +240,7 @@ export function buildAntigravityWindows(
 			let label = groupPrefix;
 			if (b.window === "5h") {
 				label = `${groupPrefix} 5h`;
-			} else if (b.window === "weekly" || String(b.bucketId).includes("weekly")) {
+			} else if (kind === "weekly") {
 				label = buckets.length > 1 ? "1w" : `${groupPrefix} 1w`;
 			} else if (buckets.length > 1 && b.displayName) {
 				const shortName = String(b.displayName).replace(/Limit|Remaining/gi, "").trim();
@@ -240,9 +269,15 @@ export function buildAntigravityWindows(
 export function buildAntigravityModelFallbackWindows(
 	models: Record<string, any>,
 	defaultResetsAt: number,
+	sharedGemini4Pool = false,
 ): QuotaWindow[] {
 	const windows: QuotaWindow[] = [];
 	const entries = Object.entries(models || {});
+	const hasArgonModel = entries.some(([id, m]) =>
+		/argon/i.test(`${id} ${m?.displayName ?? ""}`) &&
+		typeof m?.quotaInfo?.remainingFraction === "number" &&
+		Number.isFinite(m.quotaInfo.remainingFraction),
+	);
 
 	const addFromModel = (
 		matchFn: (id: string, m: any) => boolean,
@@ -288,12 +323,17 @@ export function buildAntigravityModelFallbackWindows(
 		(id, m) =>
 			(id.includes("gemini") || String(m.displayName || "").toLowerCase().includes("gemini")) &&
 			!id.includes("argon") &&
-			!String(m.displayName || "").toLowerCase().includes("argon"),
+			!String(m.displayName || "").toLowerCase().includes("argon") &&
+			!(sharedGemini4Pool && hasArgonModel && /hydrogen/i.test(`${id} ${m.displayName || ""}`)),
 		{
 			groupId: ANTIGRAVITY_GEMINI_MODELS,
 			groupLabel: "Gemini Models",
 			label: "Gemini 1w",
-			modelKeys: ["gemini-flash", "gemini-pro", "gemini-3", "gemini-2", "gemini"],
+			modelKeys: sharedGemini4Pool && !hasArgonModel
+				? [...GEMINI_MODEL_KEYS, ...ARGON_MODEL_KEYS]
+				: GEMINI_MODEL_KEYS.filter((key) =>
+					!(sharedGemini4Pool && hasArgonModel && HYDROGEN_MODEL_KEYS.includes(key)),
+				),
 		},
 	);
 
@@ -302,9 +342,9 @@ export function buildAntigravityModelFallbackWindows(
 			id.includes("argon") || String(m.displayName || "").toLowerCase().includes("argon"),
 		{
 			groupId: ANTIGRAVITY_ARGON_MODELS,
-			groupLabel: "Gemini 4 Argon",
-			label: "Argon 1w",
-			modelKeys: ["argon", "gemini-4-argon", "gemini-4"],
+			groupLabel: sharedGemini4Pool ? "Gemini 4 Argon / Hydrogen" : "Gemini 4 Argon",
+			label: sharedGemini4Pool ? "Gemini 1w" : "Argon 1w",
+			modelKeys: sharedGemini4Pool ? [...ARGON_MODEL_KEYS, ...HYDROGEN_MODEL_KEYS] : ARGON_MODEL_KEYS,
 		},
 	);
 

@@ -8,7 +8,7 @@
   "largeToolOutputCharThreshold": 1200,
   "injectRepoCacheOn": "heavy",
   "telemetryEnabled": true,
-  "telemetryHeavyModelPattern": "argon|opus|o1|o3|gpt-5|claude-4|sonnet-4|reasoner|thinking",
+  "telemetryHeavyModelPattern": "argon|carbon|astra|fable",
   "telemetryDehydrationNotifyRatio": 0.1,
   "telemetryDehydrationMinOmittedTools": 1,
   "telemetryCacheBustHitRateFloor": 0.5,

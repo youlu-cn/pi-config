@@ -213,7 +213,7 @@ export interface TelemetryConfig {
 
 export const DEFAULT_TELEMETRY_CONFIG: TelemetryConfig = {
 	enabled: true,
-	heavyModelPattern: "argon|opus|o1|o3|gpt-5|claude-4|sonnet-4|reasoner|thinking",
+	heavyModelPattern: "argon|carbon|astra|fable",
 	dehydrationNotifyRatio: 0.1,
 	dehydrationMinOmittedTools: 1,
 	cacheBustHitRateFloor: 0.5,

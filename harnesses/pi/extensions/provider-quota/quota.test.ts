@@ -9,6 +9,7 @@ import {
 	ANTIGRAVITY_GEMINI_MODELS,
 	buildAntigravityModelFallbackWindows,
 	buildAntigravityWindows,
+	hasSharedGemini4Pool,
 } from "./adapters/antigravity.ts";
 import { formatQuotaReport } from "./format.ts";
 import {
@@ -164,6 +165,67 @@ test("Antigravity maps all three quota-summary groups onto windows", () => {
 		resetsAt,
 	);
 	assert.equal(fallback.length, 2);
+});
+
+test("Antigravity keeps Pro Hydrogen in the original pool and Argon in its own 7d pool", () => {
+	const resetsAt = Date.now() + 7 * 86400_000;
+	const groups = [
+		{ displayName: "Gemini Models", buckets: [
+			{ bucketId: "gemini-5h", window: "5h", remainingFraction: 0.8 },
+			{ bucketId: "gemini-weekly", window: "weekly", remainingFraction: 0.6 },
+		] },
+		{ displayName: "Gemini 4 Argon", buckets: [
+			{ bucketId: "argon-7d", window: "7d", remainingFraction: 0.3,
+				resetTime: new Date(resetsAt).toISOString() },
+		] },
+	];
+	for (const ordered of [groups, [...groups].reverse()]) {
+		const windows = buildAntigravityWindows(ordered, resetsAt);
+		for (const id of ["gemini-4-hydrogen", "gemini-4-hydrogen-high", "gemini-3.8-flash"]) {
+			assert.deepEqual(matchQuotaWindowsForModel(windows, id).map((w) => w.remainingPercent), [80, 60]);
+		}
+		const argon = matchQuotaWindowsForModel(windows, "gemini-4-argon");
+		assert.equal(argon.length, 1);
+		assert.equal(argon[0].remainingPercent, 30);
+		assert.equal(argon[0].kind, "weekly");
+		assert.equal(argon[0].windowMinutes, 10080);
+		assert.equal(argon[0].label, "Argon 1w");
+		assert.equal(argon[0].resetsAt, resetsAt);
+
+		const shared = buildAntigravityWindows(ordered, resetsAt, true);
+		assert.deepEqual(matchQuotaWindowsForModel(shared, "gemini-4-hydrogen"),
+			matchQuotaWindowsForModel(shared, "gemini-4-argon"));
+		assert.equal(matchQuotaWindow(shared, "gemini-4-hydrogen")?.remainingPercent, 30);
+	}
+	// Some shared-tier summaries expose only the original Gemini pool.
+	const shared = buildAntigravityWindows(groups.slice(0, 1), resetsAt, true);
+	assert.deepEqual(matchQuotaWindowsForModel(shared, "gemini-4-hydrogen"),
+		matchQuotaWindowsForModel(shared, "gemini-4-argon"));
+});
+
+test("Antigravity detects shared Ultra tiers without treating Pro or unknown tiers as shared", () => {
+	assert.equal(hasSharedGemini4Pool({ paidTier: { name: "Google AI Pro" } }), false);
+	assert.equal(hasSharedGemini4Pool({ paidTier: { id: "g1-ultra-tier" } }), true);
+	assert.equal(hasSharedGemini4Pool({ currentTier: { name: "Google AI Ultra" } }), true);
+	assert.equal(hasSharedGemini4Pool({}), false);
+});
+
+test("Antigravity model fallback distinguishes Hydrogen and Argon, including shared tiers", () => {
+	const resetsAt = Date.now() + 7 * 86400_000;
+	const models = {
+		"gemini-4-hydrogen": { displayName: "Gemini 4 Hydrogen", quotaInfo: { remainingFraction: 0.8 } },
+		"gemini-4-argon": { displayName: "Gemini 4 Argon", quotaInfo: { remainingFraction: 0.3 } },
+	};
+	const pro = buildAntigravityModelFallbackWindows(models, resetsAt);
+	assert.equal(matchQuotaWindow(pro, "gemini-4-hydrogen")?.remainingPercent, 80);
+	assert.equal(matchQuotaWindow(pro, "gemini-4-argon")?.remainingPercent, 30);
+	for (const catalog of [models, { "gemini-4-hydrogen": models["gemini-4-hydrogen"] }]) {
+		const ultra = buildAntigravityModelFallbackWindows(catalog, resetsAt, true);
+		assert.equal(ultra.length, 1);
+		assert.deepEqual(matchQuotaWindowsForModel(ultra, "gemini-4-hydrogen"),
+			matchQuotaWindowsForModel(ultra, "gemini-4-argon"));
+		assert.equal(matchQuotaWindow(ultra, "gemini-4-argon")?.kind, "weekly");
+	}
 });
 
 test("Antigravity does not fabricate windows when the summary has no data", () => {

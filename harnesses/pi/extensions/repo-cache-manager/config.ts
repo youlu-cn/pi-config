@@ -25,7 +25,7 @@ export interface RepoCacheManagerConfig {
 	injectRepoCacheOn: "heavy" | "always" | "never";
 	/** Enable full-chain cache / context telemetry audit cards. */
 	telemetryEnabled: boolean;
-	/** Regex matched against provider/modelId to detect heavy models (Argon/Opus/…). */
+	/** Regex matched against provider/modelId to detect heavy models (Argon/Carbon/Astra/Fable). */
 	telemetryHeavyModelPattern: string;
 	/** Local dehydration notify threshold as saved-token ratio (0–1). */
 	telemetryDehydrationNotifyRatio: number;
@@ -46,7 +46,7 @@ export const DEFAULT_CONFIG: RepoCacheManagerConfig = {
 	largeToolOutputCharThreshold: 1200,
 	injectRepoCacheOn: "heavy",
 	telemetryEnabled: true,
-	telemetryHeavyModelPattern: "argon|opus|o1|o3|gpt-5|claude-4|sonnet-4|reasoner|thinking",
+	telemetryHeavyModelPattern: "argon|carbon|astra|fable",
 	telemetryDehydrationNotifyRatio: 0.1,
 	telemetryDehydrationMinOmittedTools: 1,
 	telemetryCacheBustHitRateFloor: 0.5,

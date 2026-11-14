@@ -348,8 +348,23 @@ test("telemetry: thinking tax prefers provider reasoning, else estimates", () =>
 });
 
 test("telemetry: heavy model + cache bust triggers", () => {
-	assert.ok(isHeavyModel("antigravity/gemini-4-argon", DEFAULT_TELEMETRY_CONFIG.heavyModelPattern));
-	assert.ok(!isHeavyModel("antigravity/gemini-3.8-flash", DEFAULT_TELEMETRY_CONFIG.heavyModelPattern));
+	for (const modelId of [
+		"antigravity/gemini-4-argon",
+		"antigravity/gemini-4-carbon",
+		"openai-codex/gpt-6-astra",
+		"anthropic/claude-fable",
+	]) {
+		assert.ok(isHeavyModel(modelId, DEFAULT_TELEMETRY_CONFIG.heavyModelPattern), modelId);
+	}
+	for (const modelId of [
+		"antigravity/gemini-3.8-flash",
+		"anthropic/claude-opus-4",
+		"openai/gpt-5",
+		"openai/o3",
+		"anthropic/claude-sonnet-4-thinking",
+	]) {
+		assert.ok(!isHeavyModel(modelId, DEFAULT_TELEMETRY_CONFIG.heavyModelPattern), modelId);
+	}
 
 	const base = {
 		modelId: "antigravity/gemini-4-argon",

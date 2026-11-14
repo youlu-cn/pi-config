@@ -2,12 +2,16 @@
   "$schema": "https://pi.dev/schemas/settings.schema.json",
   "theme": "claude-light/claude-dark",
   "defaultProvider": "antigravity",
-  "defaultModel": "gemini-3.8-flash",
+  "defaultModel": "gemini-4-hydrogen",
   "defaultThinkingLevel": "medium",
   "hideThinkingBlock": true,
   "enabledModels": [
-    "antigravity/gemini-3.8-flash",
+    "antigravity/gemini-4-hydrogen",
     "antigravity/gemini-4-argon",
+    "openai-codex/gpt-6-astra",
+    "openai-codex/gpt-6.1-sol",
+    "openai-codex/gpt-6.1-terra",
+    "openai-codex/gpt-6-luna",
     "deepseek/deepseek-v4-pro",
     "deepseek/deepseek-flash",
     "cursor/default"
@@ -37,9 +41,9 @@
     "npm:@sentiolabs/pi-frontend-design"
   ],
   "extensions": [],
-  "lastChangelogVersion": "1.5.0",
+  "lastChangelogVersion": "1.5.2",
   "extensionChangelogVersions": {
     "{\"source\":\"npm:pi-web-access\",\"scope\":\"user\"}": "0.47.0",
-    "{\"source\":\"npm:pi-cursor-sdk\",\"scope\":\"user\"}": "0.5.11"
+    "{\"source\":\"npm:pi-cursor-sdk\",\"scope\":\"user\"}": "0.5.40"
   }
 }

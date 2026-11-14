@@ -40,7 +40,6 @@ const I_CACHE = "\uF49B";
 const I_USAGE_HOURLY = "\uF017";
 const I_USAGE_WEEKLY = "\uF073";
 const I_USAGE_MONTHLY = "\uF133";
-const I_USAGE_ROLLING = "\uF01E";
 const I_USAGE_QUOTA = "\uF0E4";
 const I_SEP = "\uE0B1";
 const SUBSCRIPTION_USAGE_EVENT = "subscription-usage/status/v1";
@@ -59,10 +58,9 @@ function remainingUsageColor(percent: number): ThemeColor {
 }
 
 function usageWindowIcon(kind: SubscriptionUsageWindowKind): string {
-	if (kind === "hourly" || kind === "daily") return I_USAGE_HOURLY;
+	if (kind === "hourly" || kind === "daily" || kind === "rolling") return I_USAGE_HOURLY;
 	if (kind === "weekly") return I_USAGE_WEEKLY;
 	if (kind === "monthly") return I_USAGE_MONTHLY;
-	if (kind === "rolling") return I_USAGE_ROLLING;
 	return I_USAGE_QUOTA;
 }
 

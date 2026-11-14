@@ -44,5 +44,7 @@ provider-quota/
 
 ## 行为说明
 
+- Google AI Pro 下，Argon 使用独立的 7 天额度池；Hydrogen（`gemini-4-hydrogen`，替代 3.8 Flash）使用原 Gemini 池。根据接口返回的订阅 ID/名称识别 Ultra，将 Argon 和 Hydrogen 匹配到同一个共享池。额度与 reset 时间仍取自接口；未知订阅不默认合池。
+
 - 状态栏额度按“模型分组”归属：切换到未注册的 Provider（如 `cursor`、`deepseek`）或未匹配的分组时，`usage` 段会被清空，不会残留上一个模型的额度。
 - Antigravity 优先请求 `https://daily-cloudcode-pa.googleapis.com` 并携带完整 CLI `User-Agent` 指纹，确保完整返回全部三个分组（`Gemini Models`、`Claude and GPT models`、`Gemini 4 Argon`）及实时消耗的 `remainingFraction`，不再生成硬编码的 100% 兜底窗口。

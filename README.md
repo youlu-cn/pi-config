@@ -45,9 +45,9 @@
 
 - **模型与推理默认项**：
   - `defaultProvider: "antigravity"`：默认使用 Antigravity 提供商。
-  - `defaultModel: "gemini-3.8-flash"`：默认启动模型。
+  - `defaultModel: "gemini-4-hydrogen"`：默认启动模型。
   - `defaultThinkingLevel: "medium"`：默认思考推理级别。
-  - `enabledModels`：快捷轮换与启用的模型列表（包含 gemini-3.8-flash、gemini-4-argon、deepseek 系列及 cursor/default）。
+  - `enabledModels`：快捷轮换与启用的模型列表（antigravity 的 gemini-4-hydrogen/argon、OpenAI Codex 的 gpt-6-astra / gpt-6.1-sol / gpt-6.1-terra / gpt-6-luna、deepseek 系列及 cursor/default）。
 - **编辑器与界面**：
   - `theme: "claude-light/claude-dark"`：Claude Code 风格自适应主题（浅色/深色终端自动切换，去除用户输入沉重色块，微弱弱化思考文本）。
   - `tuiMode: "fullscreen"`：全屏交互界面。
@@ -141,6 +141,44 @@
 ### 3. 复制模式（非软链接）
 ```bash
 ./install-harness.sh -m copy
+```
+
+---
+
+## 桌面与浏览器操作
+
+Pi 可通过 CLI 与配套 Skill 操作桌面应用及网页，按任务场景分别接入以下工具。相关工具需单独安装，不由 `install-harness.sh` 自动部署。
+
+### 1. 桌面应用与原生对话框 (`cua-driver`)
+
+适用于操作系统桌面应用、原生窗口与文件选择等系统对话框：
+
+- **安装依赖**：按 [cua-driver 官方文档](https://cua.ai/docs/cua-driver) 安装 CLI 与配套 Skill，确保 `cua-driver` 位于 `PATH` 中。
+- **macOS 授权**：在系统设置中授予辅助功能（Accessibility）与屏幕录制（Screen Recording）权限。
+- **环境检查**：安装与授权完成后执行诊断，确认运行环境可用：
+
+```bash
+cua-driver doctor
+```
+
+### 2. 网页与已登录 Chrome (`playwright-cli`)
+
+适用于网页交互与复用 Chrome 已有登录态。需安装 CLI、供 Pi 使用的共享 Skill，以及 [Playwright Extension](https://github.com/microsoft/playwright-cli#extension)：
+
+```bash
+npm install -g @playwright/cli@latest
+npx skills add microsoft/playwright-cli --skill playwright-cli -g -a pi -y
+```
+
+> **Skill 管理**：统一由 `npx skills` 安装与管理，无需再执行 `playwright-cli install --skills`。
+
+- **独立浏览器**：`playwright-cli open` 启动隔离浏览器，不复用当前 Chrome 配置与登录态。
+- **复用现有 Chrome**：使用 `attach` 连接已打开的 Chrome，在 Chrome 弹窗中选择允许访问的标签页；`snapshot` 获取当前页面快照，`detach` 仅断开连接，保留 Chrome 继续运行。
+
+```bash
+playwright-cli attach --extension=chrome
+playwright-cli snapshot
+playwright-cli detach
 ```
 
 ---
