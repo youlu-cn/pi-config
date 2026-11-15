@@ -286,6 +286,7 @@ export function registerClaudeToolRenderer(
 							context.isError === true,
 							options.isPartial === true,
 							context.args?.code ?? context.args?.script,
+							width,
 						);
 						const component =
 							context.lastComponent instanceof Text

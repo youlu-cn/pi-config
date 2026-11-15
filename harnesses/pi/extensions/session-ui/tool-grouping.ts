@@ -1,31 +1,37 @@
 /**
  * Lightweight consecutive-tool grouping for session-ui.
  *
- * Patches Container.addChild/removeChild/clear so adjacent ToolExecutionComponent
- * instances collapse into a ToolGroupComponent (Claude Code style).
- *
- * Adapted from pi-cc-extensions tool grouping (MIT) — simplified for session-ui.
+ * Patches Container.addChild/removeChild/clear so consecutive same-category
+ * ToolExecutionComponent instances (including across thinking-only assistant
+ * turns with no visible prose) collapse into a single continuously-updating
+ * ToolGroupComponent.
  */
 
-import { ToolExecutionComponent } from "@earendil-works/pi-coding-agent";
+import {
+	AssistantMessageComponent,
+	ToolExecutionComponent,
+} from "@earendil-works/pi-coding-agent";
 import {
 	Container,
 	MouseRegion,
 	Text,
+	truncateToWidth,
 	visibleWidth,
 	type Component,
 } from "@earendil-works/pi-tui";
+import {
+	buildGroupLines,
+	classifyGroupCategory,
+	type GroupTheme,
+	type ToolCategory,
+	type ToolSnapshot,
+} from "./tool-grouping-core.ts";
 
 const PARENT_KEY = Symbol.for("session-ui.toolGroup.parent");
 const GENERATION_KEY = Symbol.for("session-ui.toolGroup.generation");
 const PATCH_KEY = Symbol.for("session-ui.toolGrouping.patch");
 
-type ThemeLike = {
-	fg(color: string, text: string): string;
-	bold?(text: string): string;
-};
-
-type ToolStatus = "pending" | "success" | "error";
+type ThemeLike = GroupTheme;
 
 type Patch = {
 	active: boolean;
@@ -59,31 +65,80 @@ function capitalize(name: string): string {
 	return name.charAt(0).toUpperCase() + name.slice(1);
 }
 
-function statusOf(tool: any): ToolStatus {
+function statusOf(tool: any): "pending" | "success" | "error" {
 	if (!tool?.result) return "pending";
 	if (tool.result.isError) return "error";
 	return "success";
 }
 
-function statusIcon(status: ToolStatus, theme: ThemeLike): string {
+function statusIcon(status: "pending" | "success" | "error", theme: ThemeLike): string {
 	if (status === "pending") return theme.fg("accent", "●");
 	if (status === "error") return theme.fg("error", "●");
 	return theme.fg("success", "●");
 }
 
 function isGroupable(value: unknown): boolean {
-	return value instanceof ToolExecutionComponent;
+	if (!(value instanceof ToolExecutionComponent)) return false;
+	return classifyGroupCategory(toolNameOf(value)) !== null;
 }
 
-function previousSibling(
+function isSpacer(child: unknown): boolean {
+	return typeof child === "object" && child !== null && (child as any).constructor?.name === "Spacer";
+}
+
+function isAssistantComponent(child: unknown): boolean {
+	if (typeof child !== "object" || child === null) return false;
+	return (
+		child instanceof AssistantMessageComponent ||
+		(child as any).constructor?.name === "AssistantMessageComponent"
+	);
+}
+
+function hasVisibleAssistantText(child: any): boolean {
+	const msg = child?.lastMessage;
+	if (!msg || !Array.isArray(msg.content)) return true;
+	return msg.content.some(
+		(block: any) =>
+			block?.type === "text" && typeof block.text === "string" && block.text.trim().length > 0,
+	);
+}
+
+type PriorTarget =
+	| { kind: "group"; group: ToolGroupComponent; index: number; crossedBridge: boolean }
+	| { kind: "tool"; tool: any; index: number; crossedBridge: boolean };
+
+function findMergeTarget(
 	children: readonly unknown[],
 	from: number,
-): { child: any; index: number } | undefined {
+	patch: Patch,
+	category: ToolCategory,
+): PriorTarget | undefined {
+	let crossedBridge = false;
 	for (let i = from; i >= 0; i--) {
 		const child = children[i];
-		if (child == null) continue;
-		if (typeof child === "object" && (child as any).constructor?.name === "Spacer") continue;
-		return { child, index: i };
+		if (child == null || isSpacer(child)) continue;
+
+		if (isAssistantComponent(child) && !hasVisibleAssistantText(child)) {
+			crossedBridge = true;
+			continue;
+		}
+
+		if (child instanceof ToolGroupComponent && child.isSamePatch(patch)) {
+			if (child.category === category) {
+				return { kind: "group", group: child, index: i, crossedBridge };
+			}
+			return undefined;
+		}
+
+		if (
+			isGroupable(child) &&
+			(child as any)[GENERATION_KEY] === patch.generation &&
+			classifyGroupCategory(toolNameOf(child)) === category
+		) {
+			return { kind: "tool", tool: child, index: i, crossedBridge };
+		}
+
+		return undefined;
 	}
 	return undefined;
 }
@@ -95,6 +150,7 @@ export class ToolGroupComponent extends Container {
 	private readonly patch: Patch;
 	private tools: any[] = [];
 	private view = new Container();
+	private lastRenderWidth = 80;
 	private static nextId = 1;
 
 	constructor(patch: Patch) {
@@ -122,6 +178,11 @@ export class ToolGroupComponent extends Container {
 		return this.tools.length;
 	}
 
+	get category(): ToolCategory | null {
+		if (this.tools.length === 0) return null;
+		return classifyGroupCategory(toolNameOf(this.tools[0]));
+	}
+
 	isSamePatch(other: Patch): boolean {
 		return this.patch === other;
 	}
@@ -129,21 +190,21 @@ export class ToolGroupComponent extends Container {
 	addTool(tool: any): void {
 		this.tools.push(tool);
 		tool[PARENT_KEY] = this;
-		this.rebuild();
+		this.rebuild(this.lastRenderWidth);
 	}
 
 	removeTool(tool: any): void {
 		const index = this.tools.indexOf(tool);
 		if (index >= 0) this.tools.splice(index, 1);
 		if (tool?.[PARENT_KEY] === this) delete tool[PARENT_KEY];
-		this.rebuild();
+		this.rebuild(this.lastRenderWidth);
 	}
 
 	releaseTools(): any[] {
 		const released = [...this.tools];
 		this.tools.length = 0;
 		this.patch.groups.delete(this);
-		this.rebuild();
+		this.rebuild(this.lastRenderWidth);
 		return released;
 	}
 
@@ -152,61 +213,46 @@ export class ToolGroupComponent extends Container {
 		for (const tool of this.tools) {
 			(tool as { setExpanded?: (v: boolean) => void }).setExpanded?.(expanded);
 		}
-		this.rebuild();
+		this.rebuild(this.lastRenderWidth);
 	}
 
 	invalidate(): void {
-		this.rebuild();
+		this.rebuild(this.lastRenderWidth);
 		for (const child of this.tools) (child as Component).invalidate?.();
 	}
 
-	private rebuild(): void {
+	private rebuild(width: number): void {
 		this.view.clear();
 		const theme = this.patch.theme ?? {
 			fg: (_c: string, t: string) => t,
 			bold: (t: string) => t,
 		};
-		const tools = this.tools;
-		const counts = { pending: 0, success: 0, error: 0 };
-		const labels = new Map<string, number>();
-		for (const tool of tools) {
-			counts[statusOf(tool)]++;
-			const label = capitalize(toolNameOf(tool));
-			labels.set(label, (labels.get(label) ?? 0) + 1);
+		const snapshots: ToolSnapshot[] = this.tools.map((tool) => ({
+			toolName: toolNameOf(tool),
+			args: tool?.args,
+			cwd: typeof tool?.cwd === "string" ? tool.cwd : "",
+			result: tool?.result,
+			isPartial: tool?.isPartial,
+		}));
+
+		const lines = buildGroupLines(snapshots, theme, this._expanded, width);
+		for (const line of lines) {
+			this.view.addChild(new Text(line, 0, 0));
 		}
-		const countParts: string[] = [];
-		if (counts.success) countParts.push(theme.fg("success", `${counts.success} done`));
-		if (counts.error) countParts.push(theme.fg("error", `${counts.error} failed`));
-		if (counts.pending) countParts.push(theme.fg("accent", `${counts.pending} running`));
-		const countText = countParts.join(theme.fg("dim", " · "));
-		const nameList = [...labels].map(([n, c]) => `${n}×${c}`).join(", ");
-		const title =
-			labels.size === 1
-				? [...labels.keys()][0]!
-				: (theme.bold?.("Multiple Tools") ?? "Multiple Tools");
-		const overall: ToolStatus = counts.error
-			? "error"
-			: counts.pending
-				? "pending"
-				: "success";
-		const hint = this._expanded ? "click to collapse" : "click to expand";
-		const headerText = ` ${statusIcon(overall, theme)} ${title}: ${countText}${
-			nameList ? theme.fg("dim", ` · ${nameList}`) : ""
-		}${theme.fg("dim", ` · ${hint}`)}`;
-		this.view.addChild(new Text(headerText, 0, 0));
 
 		if (!this._expanded) return;
 
-		for (let i = 0; i < tools.length; i++) {
-			const tool = tools[i];
-			const branch = i === tools.length - 1 ? "└" : "├";
+		const childWidth = Math.max(20, width - 3);
+		for (let i = 0; i < this.tools.length; i++) {
+			const tool = this.tools[i];
+			const branch = i === this.tools.length - 1 ? "└" : "├";
 			const st = statusOf(tool);
 			const label = capitalize(toolNameOf(tool));
 			this.view.addChild(
 				new Text(` ${theme.fg("dim", branch)} ${statusIcon(st, theme)} ${label}`, 0, 0),
 			);
 			try {
-				const childLines = (tool as Component).render?.(80) ?? [];
+				const childLines = (tool as Component).render?.(childWidth) ?? [];
 				for (const row of childLines) {
 					this.view.addChild(new Text(`   ${row}`, 0, 0));
 				}
@@ -217,45 +263,65 @@ export class ToolGroupComponent extends Container {
 	}
 
 	render(width: number): string[] {
-		// Ensure header reflects latest tool statuses before paint.
-		this.rebuild();
+		if (width > 0) this.lastRenderWidth = width;
+		// Ensure header and aggregated rows reflect latest tool statuses before paint.
+		this.rebuild(width > 0 ? width : this.lastRenderWidth);
 		const lines = super.render(width);
-		if (lines.length === 1 && visibleWidth(lines[0]!) > width) {
-			return [`${lines[0]!.slice(0, Math.max(0, width - 1))}…`];
-		}
-		return lines;
+		if (width <= 0) return lines;
+		return lines.map((line) =>
+			visibleWidth(line) > width ? truncateToWidth(line, width) : line,
+		);
 	}
 }
 
 function maybeGroup(patch: Patch, parent: any, component: any): void {
 	if (!patch.active || !patch.enabled() || parent instanceof ToolGroupComponent) return;
 	if (!isGroupable(component)) return;
+	const category = classifyGroupCategory(toolNameOf(component));
+	if (!category) return;
+
 	component[GENERATION_KEY] = patch.generation;
 	const children = parent?.children;
 	if (!Array.isArray(children)) return;
 	const index = children.indexOf(component);
 	if (index < 0) return;
 
-	const prior = previousSibling(children, index - 1);
-	if (prior?.child instanceof ToolGroupComponent && prior.child.isSamePatch(patch)) {
-		children.splice(index, 1);
-		prior.child.addTool(component);
+	const prior = findMergeTarget(children, index - 1, patch, category);
+	if (!prior) return;
+
+	if (prior.kind === "group") {
+		if (!prior.crossedBridge) {
+			children.splice(index, 1);
+			prior.group.addTool(component);
+			return;
+		}
+		// Move the group to the latest position so it updates in place at the bottom.
+		children.splice(prior.index, 1);
+		const newIndex = children.indexOf(component);
+		if (newIndex >= 0) {
+			children[newIndex] = prior.group;
+		}
+		(prior.group as any)[PARENT_KEY] = parent;
+		prior.group.addTool(component);
 		return;
 	}
 
-	const members = [component];
-	let firstIndex = index;
-	if (prior && isGroupable(prior.child) && prior.child[GENERATION_KEY] === patch.generation) {
-		members.unshift(prior.child);
-		firstIndex = prior.index;
-	}
-	if (members.length < 2) return;
-
 	const group = new ToolGroupComponent(patch);
-	for (const member of members) group.addTool(member);
+	group.addTool(prior.tool);
+	group.addTool(component);
 	(group as any)[PARENT_KEY] = parent;
-	if (firstIndex !== index) children.splice(index, 1);
-	children[firstIndex] = group;
+
+	if (!prior.crossedBridge) {
+		children.splice(index, 1);
+		children[prior.index] = group;
+		return;
+	}
+
+	children.splice(prior.index, 1);
+	const newIndex = children.indexOf(component);
+	if (newIndex >= 0) {
+		children[newIndex] = group;
+	}
 }
 
 function normalizeGroup(patch: Patch, group: ToolGroupComponent): void {

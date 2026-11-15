@@ -200,6 +200,7 @@ export function formatCodemodeResult(
 	isError = false,
 	running = false,
 	code?: unknown,
+	width = 80,
 ): string {
 	const calls = codemodeCalls(result);
 	const outputLines = codemodeOutputLineCount(result);
@@ -235,6 +236,9 @@ export function formatCodemodeResult(
 		].join("\n");
 	}
 
+	const safeWidth = width > 0 ? width : 80;
+	const statementBudget = Math.max(48, Math.floor((safeWidth - pad.length - 8) * 0.9));
+	const argsBudget = Math.max(40, Math.floor((safeWidth - pad.length - 20) * 0.9));
 	const lines: string[] = [];
 	const shown = calls.slice(-COLLAPSED_CALL_LIMIT);
 	if (shown.length === 0 && typeof code === "string" && code.trim()) {
@@ -244,7 +248,7 @@ export function formatCodemodeResult(
 			.find((line) => line && !line.startsWith("//") && !line.startsWith("*") && !line.startsWith("/*"));
 		if (statement) {
 			lines.push(
-				`${pad}  ${theme.fg("dim", "│")} ${theme.fg("muted", oneLine(statement, 80))}`,
+				`${pad}  ${theme.fg("dim", "│")} ${theme.fg("muted", oneLine(statement, statementBudget))}`,
 			);
 		}
 	}
@@ -257,7 +261,7 @@ export function formatCodemodeResult(
 	for (let i = 0; i < shown.length; i++) {
 		const call = shown[i]!;
 		const name = String(call?.name ?? "tool");
-		const raw = typeof call?.args === "string" ? oneLine(call.args, 60) : "";
+		const raw = typeof call?.args === "string" ? oneLine(call.args, argsBudget) : "";
 		const dur = formatCallDuration(call?.durationMs);
 		const meta = dur ? theme.fg("dim", ` ${dur}`) : "";
 		lines.push(
