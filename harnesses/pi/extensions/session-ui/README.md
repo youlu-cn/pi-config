@@ -22,7 +22,8 @@ Installs to `~/.pi/agent/extensions/session-ui/`. Restart Pi or run `/reload` to
 | --- | --- | --- |
 | Startup header | Automatic | Official Pi gradient logo + dynamic keybinding tips + hero line (replaces the built-in startup header; narrow terminals stack logo + hero) |
 | Sticky user message | Automatic (fullscreen) | Pins the scrolled-off user prompt to the viewport top; click jumps back to that message |
-| Markdown enhance | Automatic | Extra Mermaid dialects (`sequenceDiagram`, `stateDiagram-v2`, …) via grok-mermaid; circled numbers `①–⑳` → `(1)–(20)`; multiline link whitespace cleanup |
+| Markdown enhance | Automatic | Extra Mermaid dialects (`sequenceDiagram`, `stateDiagram-v2`, …) via grok-mermaid; circled numbers `①–⑳` → `(1)–(20)`; multiline link whitespace cleanup; local file links resolve against the session workspace |
+| Markdown images | `![description](local-path)` | Async inline local-image previews beneath clickable captions; local image links also expand by default; remote images are not fetched |
 | Context breakdown | `/context` | Overlay of system / memory / skills / tools / results / conversation token share; ↑↓ select, Enter preview (c / Tab+Enter copy), Esc close; non-TUI falls back to notify |
 | Session / subagent references | `@` autocomplete | `@session:[…]` injects prior-session transcripts; `@subagent:[…]` suggests agent types and asks the model to delegate separately |
 | Claude tool cards | `/tool-style [on\|compact\|off\|status]` | Rich Diff (bars / split), consecutive tool grouping, click/`Ctrl+O` expand; `compact` keeps one-line summaries until expanded |
@@ -38,6 +39,14 @@ Installs to `~/.pi/agent/extensions/session-ui/`. Restart Pi or run `/reload` to
 | Thinking effort | `/effort [level\|status]` | Opens the level selector without arguments, or sets the level directly |
 | Turn summary | Automatic | Shows elapsed duration, model, and thinking effort at the end of each assistant turn (`󰔛 4.2s · antigravity/gemini-3.8-flash (medium)`) |
 | Title & naming | Automatic / `/name` | Piggybacks on normal main-model responses (no extra model calls): names unnamed sessions once a clear goal emerges (never overwrites existing names) and updates the terminal title as activity changes; skipped during detached background runs |
+
+Local Markdown links such as `[Preview](.pi/previews/result.png)` resolve to absolute `file://` URLs when rendered, so Pi's fullscreen click handler opens the project file instead of resolving it from `/`. Absolute paths and `~/` paths are supported; existing file URLs and web links are preserved. Code examples and the stored/model-visible message stay unchanged. This display-only, TUI-only fix stays active while either `markdownEnhance.enabled` or `markdownImages.enabled` is on, and is cleaned up on `/reload`.
+
+### Markdown image previews
+
+`![Preview](.pi/previews/result.png)` displays a local PNG/JPEG/GIF/WebP preview beneath its caption. Click the caption to open the original with the system app. Ordinary `[Preview](local-image.png)` links also expand by default, including restored history; web links and non-image files remain collapsed. Set `markdownImages.expandImageLinks: false` to expand only `![...](...)` images. Previews preserve aspect ratio, default to at most 60 columns × 16 rows, and do not upscale small images beyond minimum terminal-cell sizing. Unsupported terminals/formats, missing files and decode failures keep the clickable caption; remote images are never downloaded.
+
+Control this independently with `markdownImages.enabled`, `maxWidthCells` (4–160) and `maxHeightCells` (1–40). Loading is asynchronous, with limits of 8 MiB / 20 million pixels per file, 16 cached sources per session and 4 previews per Markdown block. Over-limit files remain links. `/reload` clears the image cache, including failed loads or files replaced on disk. Session/model content remains unchanged.
 
 ### Statusline Segments
 
@@ -63,13 +72,17 @@ Displayed items and order are controlled by `statusline.segments`:
 - Default path: `~/.pi/agent/extensions/session-ui/config.json` (repo source: [config.json](../../plugin-configs/session-ui/config.json))
 - Environment override: `PI_SESSION_UI_CONFIG=/absolute/path/to/session-ui.json pi`
 
-Run `/reload` after editing. All modules (`toolActivity`, `workAnimation`, `agentSummary`, `compactThinking`, `editorPrefix`, `aliases`, `specialCards`, `compactPaste`, `claudeToolStyle`, `statusline`, `effort`, `turnSummary`, `uiMeta`, `startupHeader`, `markdownEnhance`, `contextCommand`, `reference`, `stickyUserMessage`) are enabled by default and can be disabled with `enabled: false`:
+Run `/reload` after editing. All modules (`toolActivity`, `workAnimation`, `agentSummary`, `compactThinking`, `editorPrefix`, `aliases`, `specialCards`, `compactPaste`, `claudeToolStyle`, `statusline`, `effort`, `turnSummary`, `uiMeta`, `startupHeader`, `markdownEnhance`, `markdownImages`, `contextCommand`, `reference`, `stickyUserMessage`) are enabled by default and can be disabled with `enabled: false`:
 
 | Option | Default | Allowed Values / Range |
 | --- | --- | --- |
 | `startupHeader.enabled` | `true` | Gradient logo + tips startup header |
 | `stickyUserMessage.enabled` | `true` | Pin scrolled-off user message at fullscreen viewport top |
-| `markdownEnhance.enabled` | `true` | Mermaid dialects + circled-number normalization |
+| `markdownEnhance.enabled` | `true` | Mermaid dialects + circled-number normalization + local file links |
+| `markdownImages.enabled` | `true` | Local Markdown image previews; no remote downloads |
+| `markdownImages.expandImageLinks` | `true` | Also preview ordinary links to local images |
+| `markdownImages.maxWidthCells` | `60` | 4–160 columns |
+| `markdownImages.maxHeightCells` | `16` | 1–40 rows |
 | `contextCommand.enabled` | `true` | `/context` context-window breakdown panel |
 | `reference.enabled` | `true` | Master switch for `@session` / `@subagent` references |
 | `reference.sessionReference` | `true` | `@session:[…]` autocomplete + transcript injection |

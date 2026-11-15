@@ -22,7 +22,8 @@ Pi 终端界面扩展：Claude 风格启动头（渐变 logo + 快捷键提示�
 | --- | --- | --- |
 | 启动头 | 自动显示 | 官方 Pi 渐变 logo + 动态快捷键提示 + hero 文案（替换内置启动头；窄屏时上下堆叠 logo 与 hero） |
 | 粘性用户消息 | 自动（fullscreen） | 用户消息滚出视口上沿后钉在顶部；单击跳回该消息 |
-| Markdown 增强 | 自动 | 额外 Mermaid 方言（`sequenceDiagram`、`stateDiagram-v2` 等，经 grok-mermaid）；圈数字 `①–⑳` → `(1)–(20)`；跨行链接空白规整 |
+| Markdown 增强 | 自动 | 额外 Mermaid 方言（`sequenceDiagram`、`stateDiagram-v2` 等，经 grok-mermaid）；圈数字 `①–⑳` → `(1)–(20)`；跨行链接空白规整；本地文件链接按会话项目目录解析 |
+| Markdown 图片 | `![说明](本地路径)` | 在可点击的图片说明下异步展示本地预览；默认也展开本地图片的普通链接；远程图片不下载 |
 | 上下文拆分 | `/context` | 系统提示 / Memory / Skills / 工具定义 / 工具结果 / 对话 token 占用浮层；↑↓ 选择、Enter 预览（c / Tab+Enter 复制）、Esc 关闭；非 TUI 回退为 notify |
 | 会话 / 子代理引用 | `@` 补全 | `@session:[…]` 注入历史会话转录；`@subagent:[…]` 提示子代理类型并要求分别委派 |
 | Claude 工具卡 | `/tool-style [on\|compact\|off\|status]` | Rich Diff（bars/分栏）、连续工具分组、单击/`Ctrl+O` 展开；`compact` 折叠时只留一行摘要 |
@@ -38,6 +39,14 @@ Pi 终端界面扩展：Claude 风格启动头（渐变 logo + 快捷键提示�
 | 思考档位 | `/effort [level\|status]` | 无参数打开选择器，传档位名直接设置 |
 | 本轮结算摘要 | 自动显示 | 每轮回复结束后显示耗时、所用模型及思考档位（如 `󰔛 4.2s · antigravity/gemini-3.8-flash (medium)`） |
 | 标题与命名 | 自动 / `/name` | 复用主模型正常回复（不额外发请求）：首次明确目标时为未命名会话起名（不覆盖已有名称）；随任务变化更新终端标题；后台独立续跑不触发 |
+
+`[查看效果](.pi/previews/result.png)` 等本地 Markdown 链接在渲染时会解析为绝对 `file://` URL，避免 fullscreen 点击后从 `/` 查找相对路径。支持绝对路径和 `~/` 路径；已有文件 URL 和网络链接保持不变。代码示例、会话存储及模型上下文不受影响。此修复仅作用于 TUI 显示，`markdownEnhance.enabled` 或 `markdownImages.enabled` 任一开启时生效，并在 `/reload` 时清理。
+
+### Markdown 图片预览
+
+`![效果图](.pi/previews/result.png)` 会在说明链接下展示本地 PNG/JPEG/GIF/WebP 预览；点击说明链接可用系统应用打开原图。普通 `[查看效果](本地图片.png)` 默认也会展开，包括恢复的历史消息；网页链接和非图片文件不展开。设置 `markdownImages.expandImageLinks: false` 可恢复为仅预览 `![...](...)` 图片。预览保持比例，默认不超过 60 列 × 16 行；除终端最小单元格外，不放大小图。不支持的终端/格式、文件缺失或解码失败时保留可点击说明；远程图片绝不自动下载。
+
+通过 `markdownImages.enabled` 独立开关，`maxWidthCells`（4–160）和 `maxHeightCells`（1–40）调整上限。图片异步加载：单张限制 8 MiB / 2000 万像素，单会话最多缓存 16 个来源，每个 Markdown 块最多预览 4 张，超限仅显示链接。`/reload` 清空图片缓存，可刷新加载失败或磁盘上已替换的文件。会话存储和模型上下文不变。
 
 ### 状态栏段（Segments）
 
@@ -63,13 +72,17 @@ Pi 终端界面扩展：Claude 风格启动头（渐变 logo + 快捷键提示�
 - 默认路径：`~/.pi/agent/extensions/session-ui/config.json`（仓库源：[config.json](../../plugin-configs/session-ui/config.json)）
 - 环境变量覆盖：`PI_SESSION_UI_CONFIG=/absolute/path/to/session-ui.json pi`
 
-修改后 `/reload` 生效。各模块（`toolActivity`、`workAnimation`、`agentSummary`、`compactThinking`、`editorPrefix`、`aliases`、`specialCards`、`compactPaste`、`claudeToolStyle`、`statusline`、`effort`、`turnSummary`、`uiMeta`、`startupHeader`、`markdownEnhance`、`contextCommand`、`reference`、`stickyUserMessage`）均默认开启，可设 `enabled: false` 关闭：
+修改后 `/reload` 生效。各模块（`toolActivity`、`workAnimation`、`agentSummary`、`compactThinking`、`editorPrefix`、`aliases`、`specialCards`、`compactPaste`、`claudeToolStyle`、`statusline`、`effort`、`turnSummary`、`uiMeta`、`startupHeader`、`markdownEnhance`、`markdownImages`、`contextCommand`、`reference`、`stickyUserMessage`）均默认开启，可设 `enabled: false` 关闭：
 
 | 配置项 | 默认值 | 可选值 / 范围 |
 | --- | --- | --- |
 | `startupHeader.enabled` | `true` | 渐变 logo + 快捷键提示启动头 |
 | `stickyUserMessage.enabled` | `true` | fullscreen 下将滚出上沿的用户消息钉在视口顶部 |
-| `markdownEnhance.enabled` | `true` | Mermaid 方言 + 圈数字规范化 |
+| `markdownEnhance.enabled` | `true` | Mermaid 方言 + 圈数字规范化 + 本地文件链接 |
+| `markdownImages.enabled` | `true` | 本地 Markdown 图片预览；不下载远程图片 |
+| `markdownImages.expandImageLinks` | `true` | 同时预览指向本地图片的普通链接 |
+| `markdownImages.maxWidthCells` | `60` | 4–160 列 |
+| `markdownImages.maxHeightCells` | `16` | 1–40 行 |
 | `contextCommand.enabled` | `true` | `/context` 上下文占用拆分面板 |
 | `reference.enabled` | `true` | `@session` / `@subagent` 引用总开关 |
 | `reference.sessionReference` | `true` | `@session:[…]` 补全 + 会话转录注入 |

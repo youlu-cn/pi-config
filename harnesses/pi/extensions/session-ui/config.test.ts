@@ -59,7 +59,7 @@ test("reports malformed JSON and unreadable config paths", () => {
 test("warns on invalid roots and every explicitly invalid config section", () => {
 	for (const raw of [null, [], false, "invalid", 3]) {
 		assert.deepEqual(withConfig(raw).warnings, ["config root must be an object"]);
-		for (const key of ["toolActivity", "workAnimation", "compactPaste", "statusline", "effort", "turnDuration", "uiMeta", "startupHeader", "markdownEnhance", "contextCommand", "reference", "stickyUserMessage"]) {
+		for (const key of ["toolActivity", "workAnimation", "compactPaste", "statusline", "effort", "turnDuration", "uiMeta", "startupHeader", "markdownEnhance", "markdownImages", "contextCommand", "reference", "stickyUserMessage"]) {
 			const result = withConfig({ [key]: raw });
 			assert.deepEqual(result.warnings, [`${key} must be an object`]);
 			assert.deepEqual(result.config, DEFAULT_SESSION_UI_CONFIG);
@@ -72,6 +72,16 @@ test("warns on invalid roots and every explicitly invalid config section", () =>
 			assert.deepEqual(result.config, DEFAULT_SESSION_UI_CONFIG);
 		}
 	}
+});
+
+test("loads independent Markdown image preview settings and validates bounds", () => {
+	assert.deepEqual(withConfig({}).config.markdownImages, { enabled: true, expandImageLinks: true, maxWidthCells: 60, maxHeightCells: 16 });
+	const valid = withConfig({ markdownImages: { enabled: false, expandImageLinks: false, maxWidthCells: 40, maxHeightCells: 8 } });
+	assert.deepEqual(valid.config.markdownImages, { enabled: false, expandImageLinks: false, maxWidthCells: 40, maxHeightCells: 8 });
+	assert.deepEqual(valid.warnings, []);
+	const invalid = withConfig({ markdownImages: { enabled: 1, expandImageLinks: "yes", maxWidthCells: 0, maxHeightCells: 41 } });
+	assert.deepEqual(invalid.config.markdownImages, DEFAULT_SESSION_UI_CONFIG.markdownImages);
+	assert.equal(invalid.warnings.length, 4);
 });
 
 test("keeps valid sibling settings when a config section falls back", () => {

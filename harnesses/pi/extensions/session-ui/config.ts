@@ -110,6 +110,13 @@ export interface SessionUiConfig {
 	markdownEnhance: {
 		enabled: boolean;
 	};
+	/** Local Markdown image previews; remote images are never fetched. */
+	markdownImages: {
+		enabled: boolean;
+		expandImageLinks: boolean;
+		maxWidthCells: number;
+		maxHeightCells: number;
+	};
 	/** /context context-window breakdown panel (keyboard MVP). */
 	contextCommand: {
 		enabled: boolean;
@@ -230,6 +237,12 @@ export const DEFAULT_SESSION_UI_CONFIG: SessionUiConfig = {
 	markdownEnhance: {
 		enabled: true,
 	},
+	markdownImages: {
+		enabled: true,
+		expandImageLinks: true,
+		maxWidthCells: 60,
+		maxHeightCells: 16,
+	},
 	contextCommand: {
 		enabled: true,
 	},
@@ -339,6 +352,7 @@ function parseConfig(raw: unknown, warnings: string[]): SessionUiConfig {
 	);
 	const startupHeader = objectValue(raw.startupHeader, "startupHeader", warnings);
 	const markdownEnhance = objectValue(raw.markdownEnhance, "markdownEnhance", warnings);
+	const markdownImages = objectValue(raw.markdownImages, "markdownImages", warnings);
 	const contextCommand = objectValue(raw.contextCommand, "contextCommand", warnings);
 	const reference = objectValue(raw.reference, "reference", warnings);
 	const stickyUserMessage = objectValue(
@@ -764,6 +778,16 @@ function parseConfig(raw: unknown, warnings: string[]): SessionUiConfig {
 				"markdownEnhance.enabled",
 				warnings,
 			),
+		},
+		markdownImages: {
+			enabled: booleanValue(markdownImages.enabled, DEFAULT_SESSION_UI_CONFIG.markdownImages.enabled,
+				"markdownImages.enabled", warnings),
+			expandImageLinks: booleanValue(markdownImages.expandImageLinks, DEFAULT_SESSION_UI_CONFIG.markdownImages.expandImageLinks,
+				"markdownImages.expandImageLinks", warnings),
+			maxWidthCells: boundedInteger(markdownImages.maxWidthCells, DEFAULT_SESSION_UI_CONFIG.markdownImages.maxWidthCells,
+				"markdownImages.maxWidthCells", 4, 160, warnings),
+			maxHeightCells: boundedInteger(markdownImages.maxHeightCells, DEFAULT_SESSION_UI_CONFIG.markdownImages.maxHeightCells,
+				"markdownImages.maxHeightCells", 1, 40, warnings),
 		},
 		contextCommand: {
 			enabled: booleanValue(

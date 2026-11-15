@@ -40,6 +40,8 @@ import {
 import { registerToolActivity } from "./tool-activity.ts";
 import { registerTurnSummary } from "./turn-summary.ts";
 import { createMarkdownEnhanceTransform } from "./markdown-enhance.ts";
+import { registerLocalFileLinks } from "./local-file-links.ts";
+import { registerMarkdownImages } from "./markdown-images.ts";
 import { registerReference } from "./reference.ts";
 import { registerStickyUserMessage } from "./sticky-user-message.ts";
 import {
@@ -71,6 +73,11 @@ export default function sessionUi(pi: ExtensionAPI): void {
 	if (uiMetaActive) {
 		registerUiMeta(pi, config.uiMeta, titleController);
 	}
+
+	if (config.markdownEnhance.enabled || config.markdownImages.enabled) {
+		registerLocalFileLinks(pi, { links: true, images: true });
+	}
+	registerMarkdownImages(pi, config.markdownImages);
 
 	// One markdownTransformer slot per extension — chain ui-meta strip then enhance.
 	const markdownPipeline: MarkdownTransformer[] = [];

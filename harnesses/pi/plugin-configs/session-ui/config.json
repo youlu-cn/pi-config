@@ -58,6 +58,12 @@
   "markdownEnhance": {
     "enabled": true
   },
+  "markdownImages": {
+    "enabled": true,
+    "expandImageLinks": true,
+    "maxWidthCells": 60,
+    "maxHeightCells": 16
+  },
   "contextCommand": {
     "enabled": true
   },
