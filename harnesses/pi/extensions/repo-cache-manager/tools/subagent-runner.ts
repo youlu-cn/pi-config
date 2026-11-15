@@ -167,7 +167,7 @@ export function execCommandAsync(
  */
 export function resolveProviderExtension(provider: string): string | null {
 	if (provider === "antigravity") {
-		const candidate = join(homedir(), ".pi", "agent", "npm", "node_modules", "pi-antigravity");
+		const candidate = join(homedir(), ".pi", "agent", "npm", "node_modules", "@specode", "pi-antigravity");
 		if (existsSync(candidate)) return candidate;
 	}
 	if (provider === "cursor") {
@@ -272,7 +272,7 @@ export async function runIsolatedSubagent(options: IsolatedAgentOptions): Promis
 		signal: options.signal,
 	});
 
-	if (piRes.exitCode !== 0 && !piRes.stdout) {
+	if (piRes.exitCode !== 0) {
 		throw new Error(piRes.stderr || `pi process exited with code ${piRes.exitCode}`);
 	}
 

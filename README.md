@@ -67,7 +67,7 @@
   - `git:github.com/badlogic/pi-subagent`：独立子代理（Subagent）并行协作与任务委派。
   - `npm:@ff-labs/pi-fff`：高性能模糊文件搜索（Fast File Finder）。
   - `npm:pi-cursor-sdk`：Cursor 接口与模型支持。
-  - `npm:pi-antigravity`：Antigravity 模型接入支持。
+  - `npm:@specode/pi-antigravity`：Antigravity 模型接入支持。
   - `npm:@sentiolabs/pi-frontend-design`：高质感前端设计辅助插件。
 - **自定义插件 (`extensions`)**：
   - `session-ui`：全功能 UI 增强扩展（包含定制状态栏 Statusline、回合结算摘要 Turn-Summary、紧凑粘贴 Compact-Paste、工具执行动效 Work-Animation、会话元数据控制器等）。
@@ -180,6 +180,23 @@ playwright-cli attach --extension=chrome
 playwright-cli snapshot
 playwright-cli detach
 ```
+
+---
+
+## 回归测试
+
+使用支持直接执行 TypeScript 的 Node.js，在仓库根目录运行：
+
+```bash
+# Set this to the installed Pi package directory to enable SDK integration tests.
+export PI_PACKAGE_ROOT="$(npm root -g)/@earendil-works/pi-coding-agent"
+node --test install-harness.test.mjs \
+  harnesses/pi/extensions/*/*.test.ts \
+  harnesses/pi/extensions/session-ui/*.integration.test.mjs
+bash -n install-harness.sh
+```
+
+若 Pi 不是通过全局 npm 安装，请将 `PI_PACKAGE_ROOT` 改为实际包目录。未设置该变量会跳过 SDK 集成测试；缺少可选 Mermaid 渲染依赖时，对应测试也会跳过。安装模式切换及子进程失败测试均在临时目录使用离线夹具，不修改现有安装或调用模型服务。
 
 ---
 

@@ -58,6 +58,8 @@ export class QuotaScheduler {
 	private readonly cacheTtlMs: number;
 	private pollTimer?: NodeJS.Timeout;
 	private activeAbortController?: AbortController;
+	private lifecycleVersion = 0;
+	private refreshVersion = 0;
 
 	constructor(
 		pi: ExtensionAPI,
@@ -83,6 +85,8 @@ export class QuotaScheduler {
 
 	/** Stop polling and abort any pending fetch */
 	stop(): void {
+		this.lifecycleVersion++;
+		this.refreshVersion++;
 		if (this.pollTimer) {
 			clearInterval(this.pollTimer);
 			this.pollTimer = undefined;
@@ -96,7 +100,13 @@ export class QuotaScheduler {
 
 	/** Query quota for active model's provider and broadcast if changed (with singleflight deduplication) */
 	async refreshActiveProvider(ctx: ExtensionContext): Promise<ProviderQuotaReport | undefined> {
+		const version = ++this.refreshVersion;
+		const lifecycle = this.lifecycleVersion;
 		const currentProvider = ctx.model?.provider;
+		const modelId = ctx.model?.id;
+		const isCurrent = () =>
+			version === this.refreshVersion && lifecycle === this.lifecycleVersion &&
+			ctx.model?.provider === currentProvider && ctx.model?.id === modelId;
 		if (!currentProvider) {
 			this.broadcastUnavailable("none");
 			return undefined;
@@ -114,61 +124,59 @@ export class QuotaScheduler {
 		const now = Date.now();
 		const cached = this.cache.get(adapter.id);
 		if (cached && cached.expiresAt > now) {
-			this.broadcast(cached.report, ctx);
+			this.broadcast(cached.report, modelId, adapter.modelMatching);
 			return cached.report;
 		}
 
-		// 2. Singleflight deduplication: reuse pending request if already in flight
-		const existingPromise = this.inFlight.get(adapter.id);
-		if (existingPromise) {
-			const report = await existingPromise;
-			if (report) this.broadcast(report, ctx);
-			return report;
-		}
-
-		// 3. Execute network fetch with 8-second timeout linked to scheduler lifecycle
-		if (!this.activeAbortController || this.activeAbortController.signal.aborted) {
-			this.activeAbortController = new AbortController();
-		}
-		const { signal, cleanup } = createTimeoutSignal(8000, this.activeAbortController.signal);
-
-		const fetchPromise = (async () => {
-			try {
-				const report = await adapter.fetchQuota(ctx, signal);
-				this.cache.set(adapter.id, {
-					report,
-					expiresAt: Date.now() + this.cacheTtlMs,
-				});
-				this.broadcast(report, ctx);
-				return report;
-			} catch {
-				// Silent fallback: do not interrupt agent execution. Keep the last known
-				// good report for this adapter, but never keep showing a report that
-				// belongs to a different provider.
-				if (!this.cache.has(adapter.id)) {
-					this.broadcastUnavailable(currentProvider);
-				}
-				return undefined;
-			} finally {
-				cleanup();
-				this.inFlight.delete(adapter.id);
+		// Shared fetches update only their adapter cache. The latest caller owns display state.
+		let fetchPromise = this.inFlight.get(adapter.id);
+		if (!fetchPromise) {
+			if (!this.activeAbortController || this.activeAbortController.signal.aborted) {
+				this.activeAbortController = new AbortController();
 			}
-		})();
+			const { signal, cleanup } = createTimeoutSignal(8000, this.activeAbortController.signal);
+			const request: Promise<ProviderQuotaReport | undefined> = Promise.resolve().then(async () => {
+				try {
+					const report = await adapter.fetchQuota(ctx, signal);
+					if (lifecycle !== this.lifecycleVersion || signal.aborted) return undefined;
+					this.cache.set(adapter.id, {
+						report,
+						expiresAt: Date.now() + this.cacheTtlMs,
+					});
+					return report;
+				} catch {
+					return undefined;
+				} finally {
+					cleanup();
+					if (this.inFlight.get(adapter.id) === request) this.inFlight.delete(adapter.id);
+				}
+			});
+			this.inFlight.set(adapter.id, request);
+			fetchPromise = request;
+		}
 
-		this.inFlight.set(adapter.id, fetchPromise);
-		return fetchPromise;
+		const report = await fetchPromise;
+		if (isCurrent()) {
+			const displayReport = report ?? this.cache.get(adapter.id)?.report;
+			if (displayReport) {
+				this.broadcast(displayReport, modelId, adapter.modelMatching);
+			} else {
+				this.broadcastUnavailable(currentProvider);
+			}
+		}
+		return report;
 	}
 
 	/** Broadcast standard status event to session-ui statusline */
-	private broadcast(report: ProviderQuotaReport, ctx?: ExtensionContext): void {
+	private broadcast(
+		report: ProviderQuotaReport,
+		modelId?: string,
+		modelMatching: "all" | "modelKeys" = "modelKeys",
+	): void {
 		let targetWindows = report.windows;
-		const modelId = ctx?.model?.id;
 
-		// Single-group providers (e.g. ChatGPT / Grok / Claude Bridge) apply to all
-		// models served by that provider; multi-group providers (e.g. Antigravity)
-		// match the specific model family group.
-		const distinctGroups = new Set(report.windows.map((w) => w.groupId || ""));
-		if (modelId && distinctGroups.size > 1) {
+		// Partial Antigravity responses still require matching, even with only one group.
+		if (modelId && modelMatching !== "all") {
 			targetWindows = matchQuotaWindowsForModel(report.windows, modelId);
 		}
 

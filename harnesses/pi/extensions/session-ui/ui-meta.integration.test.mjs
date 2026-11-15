@@ -378,7 +378,12 @@ test("preserves Pi prompt and tool restoration when another extension rewrites o
 });
 
 function preparePrompt(options, messages) {
-	const host = { _toolRegistry: new Map(), _applyToolLoadout: AgentSession.prototype._applyToolLoadout, agent: { state: {} } };
+	const host = {
+		_toolRegistry: new Map(),
+		getActiveToolNames: () => [],
+		_applyToolLoadout: AgentSession.prototype._applyToolLoadout,
+		agent: { state: {}, setTools() {} },
+	};
 	return AgentSession.prototype._preparePromptAndToolLoadout.call(host, options, messages);
 }
 

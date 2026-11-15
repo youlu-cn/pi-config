@@ -1,7 +1,6 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { loadAuthStorage } from "../auth-helper.ts";
-import type { ProviderAdapter, ProviderQuotaReport, QuotaWindow } from "../types.ts";
-import { buildQuotaWindow } from "./base.ts";
+import type { ProviderAdapter, ProviderQuotaReport } from "../types.ts";
 
 export class ClaudeAdapter implements ProviderAdapter {
 	readonly id = "claude";
@@ -29,43 +28,11 @@ export class ClaudeAdapter implements ProviderAdapter {
 		// Anthropic official API key is pay-as-you-go; no polling subscription quota endpoint is provided.
 		if (!isBridge) {
 			throw new Error(
-				"Anthropic API key is pay-as-you-go and does not have a subscription quota endpoint. Quota tracking is only available when using Claude Code bridge.",
+				"Anthropic API key is pay-as-you-go and does not have a subscription quota endpoint.",
 			);
 		}
 
-		// Claude Code Bridge mode: estimate or resolve via Claude Code
-		const now = Date.now();
-		const reset5h = now + 5 * 3600 * 1000;
-
-		const primaryWindow = buildQuotaWindow({
-			kind: "rolling",
-			groupId: "claude",
-			groupLabel: "Claude Code Subscription",
-			label: "Claude 5h",
-			modelKeys: ["claude", "anthropic"],
-			remainingPercent: 100,
-			windowMinutes: 300,
-			resetsAt: reset5h,
-		});
-
-		const weeklyWindow = buildQuotaWindow({
-			kind: "weekly",
-			groupId: "claude",
-			groupLabel: "Claude Code Subscription",
-			label: "1w",
-			modelKeys: ["claude", "anthropic"],
-			remainingPercent: 100,
-			windowMinutes: 10080,
-			resetsAt: now + 7 * 24 * 3600 * 1000,
-		});
-
-		return {
-			providerId: "claude-bridge",
-			displayName: "Anthropic Claude (Bridge)",
-			planName: "Pro/Max",
-			capturedAt: now,
-			primaryWindow,
-			windows: [primaryWindow, weeklyWindow],
-		};
+		// No bridge quota source is integrated yet; never invent remaining usage or resets.
+		throw new Error("Claude Code Bridge quota information is unavailable: no usage data source is configured.");
 	}
 }

@@ -19,6 +19,7 @@ export class GptAdapter implements ProviderAdapter {
 	readonly id = "gpt";
 	readonly displayName = "OpenAI / GPT";
 	readonly supportedProviders = ["openai", "openai-codex"];
+	readonly modelMatching = "all" as const;
 
 	isConfigured(ctx: ExtensionContext): boolean {
 		const auth = loadAuthStorage();

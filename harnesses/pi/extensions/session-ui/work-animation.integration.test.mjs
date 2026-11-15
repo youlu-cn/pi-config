@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
+import { DEFAULT_SESSION_UI_CONFIG } from "./config.ts";
 
 const root = process.env.PI_PACKAGE_ROOT;
 let registerWorkAnimation, sessionUi;
@@ -27,6 +28,14 @@ if (root) {
 }
 const options = { skip: !root };
 
+function animationOnlyConfig(workAnimation) {
+	return {
+		...Object.fromEntries(Object.entries(DEFAULT_SESSION_UI_CONFIG)
+			.map(([key, value]) => [key, { ...value, enabled: false }])),
+		workAnimation,
+	};
+}
+
 function fixture(t) {
 	const dir = mkdtempSync(join(tmpdir(), "session-ui-animation-"));
 	t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -47,7 +56,7 @@ function harness(t, statePath, enabled = true, register) {
 		ui: {
 			setWidget(_id, factory) { widget = factory?.({ requestRender() {} }, { fg: (_color, value) => value }); },
 			setWorkingVisible(value) { visibility.push(value); },
-			setWorkingMessage() {}, setWorkingIndicator() {}, setTitle() {},
+			setWorkingMessage() {}, setWorkingIndicator() {}, setTitle() {}, setHeader() {},
 			notify(message, level) { notifications.push({ message, level }); },
 		},
 	};
@@ -56,7 +65,7 @@ function harness(t, statePath, enabled = true, register) {
 		setAnimationFrame() {}, paint() {}, isWorking: () => working,
 		setWorking(value) { working = value; },
 	});
-	const emit = (event) => { for (const handler of handlers.get(event) ?? []) handler({}, ctx); };
+	const emit = (event) => Promise.all((handlers.get(event) ?? []).map((handler) => handler({}, ctx)));
 	t.after(() => emit("session_shutdown"));
 	return {
 		ctx, emit, notifications, visibility,
@@ -120,12 +129,7 @@ test("session-ui uses the agent state directory without rewriting an override co
 	const { dir, statePath } = fixture(t);
 	const configPath = join(dir, "custom/config.json");
 	mkdirSync(dirname(configPath));
-	const config = JSON.stringify({
-		toolActivity: { enabled: false }, compactPaste: { enabled: false },
-		statusline: { enabled: false }, effort: { enabled: false },
-		turnDuration: { enabled: false }, uiMeta: { enabled: false },
-		workAnimation: { enabled: true },
-	});
+	const config = JSON.stringify(animationOnlyConfig({ enabled: true }));
 	writeFileSync(configPath, config);
 	const previousDir = process.env.PI_CODING_AGENT_DIR;
 	const previousConfig = process.env.PI_SESSION_UI_CONFIG;
@@ -150,12 +154,7 @@ test("session-ui uses the agent state directory without rewriting an override co
 test("config fallback notification is emitted once when UI becomes available", options, (t) => {
 	const { dir, statePath } = fixture(t);
 	const configPath = join(dir, "config.json");
-	writeFileSync(configPath, JSON.stringify({
-		toolActivity: { enabled: false }, compactPaste: { enabled: false },
-		statusline: { enabled: false }, effort: { enabled: false },
-		turnDuration: { enabled: false }, uiMeta: { enabled: false },
-		workAnimation: false,
-	}));
+	writeFileSync(configPath, JSON.stringify(animationOnlyConfig(false)));
 	const previousDir = process.env.PI_CODING_AGENT_DIR;
 	const previousConfig = process.env.PI_SESSION_UI_CONFIG;
 	process.env.PI_CODING_AGENT_DIR = dir;

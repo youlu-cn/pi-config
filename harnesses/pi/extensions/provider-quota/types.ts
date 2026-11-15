@@ -44,6 +44,8 @@ export interface ProviderAdapter {
 	readonly displayName: string;
 	/** Provider IDs matched in Pi configuration (e.g. ["antigravity"], ["openai", "openai-codex"]) */
 	readonly supportedProviders: string[];
+	/** Whether windows cover every served model; default requires modelKeys matching. */
+	readonly modelMatching?: "all" | "modelKeys";
 
 	/** Check if this adapter has valid credentials or can execute in the current context */
 	isConfigured(ctx: ExtensionContext): boolean;

@@ -35,6 +35,10 @@ provider-quota/
 
 ## Behavior notes
 
+- Claude Code Bridge quota is unavailable until a real usage source is integrated; no synthetic 100% windows or reset timestamps are emitted.
+- Only the latest refresh can update the statusline. Late responses after provider/model switches or scheduler shutdown cannot replace current usage.
+- Adapters default to `modelKeys` matching, even for a single returned group. Provider-wide adapters explicitly declare `modelMatching: "all"`.
+
 - On Google AI Pro, Argon has its own 7-day pool; Hydrogen (`gemini-4-hydrogen`, replacing 3.8 Flash) uses the original Gemini pool. Ultra tiers, identified by the returned tier ID/name, route Argon and Hydrogen to one shared pool. Reset timestamps and percentages remain API-derived; unknown tiers are not assumed to share pools.
 
 - Statusline windows are attributed per model group. When switching to an unknown provider (e.g. `cursor`, `deepseek`) or an unmatched model group, the `usage` segment is cleared instead of showing stale quota from the previous model.

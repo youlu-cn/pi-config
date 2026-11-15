@@ -26,11 +26,18 @@ const ANTIGRAVITY_HOSTS = [
 ];
 
 // Catalog & quota-group visibility is gated on the full CLI User-Agent fingerprint.
-// A short "antigravity/1.4.0" string hides Gemini Models and Gemini 4 Argon groups
-// in retrieveUserQuotaSummary, while `cloudcode-pa` returns static 1.0 fractions.
+// Keep in sync with @specode/pi-antigravity (agy CLI 1.5.9). A short UA string
+// hides Gemini Models and Gemini 4 Argon groups in retrieveUserQuotaSummary,
+// while `cloudcode-pa` returns static 1.0 fractions.
+const ANTIGRAVITY_CLI_VERSION = "1.5.9";
+const ANTIGRAVITY_CLI_BUILD = "1021519450";
+const ANTIGRAVITY_OS_TYPE =
+	process.platform === "win32" ? "windows" : process.platform;
+const ANTIGRAVITY_ARCH =
+	process.arch === "x64" ? "amd64" : process.arch;
 const ANTIGRAVITY_USER_AGENT =
 	process.env.ANTIGRAVITY_USER_AGENT?.trim() ||
-	"antigravity/cli/1.4.0 (aidev_client; os_type=linux; arch=amd64; cl=982146307; auth_method=consumer)";
+	`antigravity/cli/${ANTIGRAVITY_CLI_VERSION} (aidev_client; os_type=${ANTIGRAVITY_OS_TYPE}; arch=${ANTIGRAVITY_ARCH}; cl=${ANTIGRAVITY_CLI_BUILD}; auth_method=consumer)`;
 
 async function fetchAntigravityApi(
 	path: string,

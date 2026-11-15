@@ -44,6 +44,10 @@ provider-quota/
 
 ## 行为说明
 
+- Claude Code Bridge 在接入真实用量来源前返回不可用，不生成虚构的 100% 剩余额度或重置时间。
+- 仅最新刷新可更新状态栏；切换 Provider/模型或停止调度器后的迟到响应不会覆盖当前用量。
+- 适配器默认按 `modelKeys` 匹配，即使只返回一个分组；全 Provider 共用额度的适配器须显式声明 `modelMatching: "all"`。
+
 - Google AI Pro 下，Argon 使用独立的 7 天额度池；Hydrogen（`gemini-4-hydrogen`，替代 3.8 Flash）使用原 Gemini 池。根据接口返回的订阅 ID/名称识别 Ultra，将 Argon 和 Hydrogen 匹配到同一个共享池。额度与 reset 时间仍取自接口；未知订阅不默认合池。
 
 - 状态栏额度按“模型分组”归属：切换到未注册的 Provider（如 `cursor`、`deepseek`）或未匹配的分组时，`usage` 段会被清空，不会残留上一个模型的额度。

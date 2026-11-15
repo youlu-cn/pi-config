@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { formatCountdown } from "./auth-helper.ts";
 import { buildQuotaWindow } from "./adapters/base.ts";
+import { ClaudeAdapter } from "./adapters/claude.ts";
 import { AdapterRegistry } from "./registry.ts";
 import {
 	ANTIGRAVITY_3P_MODELS,
@@ -18,7 +19,148 @@ import {
 	matchQuotaWindow,
 	matchQuotaWindowsForModel,
 } from "./scheduler.ts";
-import type { ProviderQuotaReport, QuotaWindow } from "./types.ts";
+import type { ProviderAdapter, ProviderQuotaReport, QuotaWindow } from "./types.ts";
+
+function deferred<T>() {
+	let resolve!: (value: T) => void;
+	let reject!: (reason: Error) => void;
+	const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
+	return { promise, resolve, reject };
+}
+
+function testReport(providerId = "test-a", keys = ["alpha"]): ProviderQuotaReport {
+	const window = buildQuotaWindow({
+		kind: "weekly", groupId: "test", label: keys[0]!, modelKeys: keys, remainingPercent: 42,
+	});
+	return { providerId, displayName: providerId, capturedAt: Date.now(), primaryWindow: window, windows: [window] };
+}
+
+function testScheduler(adapters: ProviderAdapter[], cacheTtlMs = 60_000) {
+	const registry = new AdapterRegistry();
+	for (const adapter of adapters) registry.register(adapter);
+	const events: any[] = [];
+	const scheduler = new QuotaScheduler({ events: { emit: (_name: string, data: unknown) => events.push(data) } } as any,
+		registry, { cacheTtlMs });
+	return { scheduler, events };
+}
+
+function testAdapter(fetchQuota: ProviderAdapter["fetchQuota"], id = "test-a"): ProviderAdapter {
+	return { id, displayName: id, supportedProviders: [id], isConfigured: () => true, fetchQuota };
+}
+
+test("Claude Bridge reports unavailable instead of fabricating quota", async () => {
+	const ctx = { model: { provider: "claude-bridge", id: "claude-test" } } as any;
+	const adapter = new ClaudeAdapter();
+	await assert.rejects(adapter.fetchQuota(ctx, new AbortController().signal), /no usage data source/);
+	const { scheduler, events } = testScheduler([{ ...adapter, isConfigured: () => true, fetchQuota: adapter.fetchQuota.bind(adapter) }]);
+	try {
+		await scheduler.refreshActiveProvider(ctx);
+		assert.equal(events.at(-1).status, "unavailable");
+		assert.deepEqual(events.at(-1).windows, []);
+	} finally { scheduler.stop(); }
+});
+
+for (const outcome of ["success", "failure"] as const) {
+	test(`late provider ${outcome} cannot overwrite the new provider`, async () => {
+		const pending = deferred<ProviderQuotaReport>();
+		const { scheduler, events } = testScheduler([
+			testAdapter(() => pending.promise),
+			testAdapter(async () => testReport("test-b", ["beta"]), "test-b"),
+		]);
+		try {
+			const ctx = { model: { provider: "test-a", id: "alpha" } } as any;
+			const old = scheduler.refreshActiveProvider(ctx);
+			await Promise.resolve();
+			ctx.model = { provider: "test-b", id: "beta" };
+			await scheduler.refreshActiveProvider(ctx);
+			if (outcome === "success") pending.resolve(testReport());
+			else pending.reject(new Error("Old provider failed"));
+			await old;
+			assert.equal(events.length, 1);
+			assert.equal(events[0].providerId, "test-b");
+			assert.equal(events[0].status, "ready");
+		} finally { scheduler.stop(); }
+	});
+}
+
+test("switching to an unsupported provider suppresses the pending result", async () => {
+	const pending = deferred<ProviderQuotaReport>();
+	const { scheduler, events } = testScheduler([testAdapter(() => pending.promise)]);
+	try {
+		const ctx = { model: { provider: "test-a", id: "alpha" } } as any;
+		const old = scheduler.refreshActiveProvider(ctx);
+		await Promise.resolve();
+		ctx.model = { provider: "cursor", id: "default" };
+		await scheduler.refreshActiveProvider(ctx);
+		pending.resolve(testReport());
+		await old;
+		assert.equal(events.length, 1);
+		assert.equal(events[0].providerId, "cursor");
+		assert.equal(events[0].status, "unavailable");
+	} finally { scheduler.stop(); }
+});
+
+test("singleflight publishes only the latest model's matched windows", async () => {
+	const pending = deferred<ProviderQuotaReport>();
+	let calls = 0;
+	const { scheduler, events } = testScheduler([testAdapter(() => { calls++; return pending.promise; })]);
+	try {
+		const old = scheduler.refreshActiveProvider({ model: { provider: "test-a", id: "alpha" } } as any);
+		const latest = scheduler.refreshActiveProvider({ model: { provider: "test-a", id: "beta" } } as any);
+		const report = testReport();
+		report.windows.push({ ...report.primaryWindow, groupId: "beta", label: "beta", modelKeys: ["beta"] });
+		pending.resolve(report);
+		await Promise.all([old, latest]);
+		assert.equal(calls, 1);
+		assert.equal(events.length, 1);
+		assert.deepEqual(events[0].windows.map((w: QuotaWindow) => w.label), ["beta"]);
+	} finally { scheduler.stop(); }
+});
+
+test("stopped requests cannot broadcast, cache, or remove replacement singleflight", async () => {
+	const oldRequest = deferred<ProviderQuotaReport>();
+	const newRequest = deferred<ProviderQuotaReport>();
+	let calls = 0;
+	const { scheduler, events } = testScheduler([testAdapter(() => ++calls === 1 ? oldRequest.promise : newRequest.promise)]);
+	try {
+		const ctx = { model: { provider: "test-a", id: "alpha" } } as any;
+		const old = scheduler.refreshActiveProvider(ctx);
+		await Promise.resolve();
+		scheduler.stop();
+		const latest = scheduler.refreshActiveProvider(ctx);
+		await Promise.resolve();
+		oldRequest.resolve(testReport());
+		await old;
+		assert.equal(events.length, 0);
+		const joined = scheduler.refreshActiveProvider(ctx);
+		const fresh = testReport();
+		fresh.primaryWindow.remainingPercent = 17;
+		newRequest.resolve(fresh);
+		await Promise.all([latest, joined]);
+		assert.equal(calls, 2);
+		assert.equal(events.length, 1);
+		assert.equal(events[0].windows[0].remainingPercent, 17);
+		assert.equal(await scheduler.refreshActiveProvider(ctx), fresh);
+	} finally { scheduler.stop(); }
+});
+
+test("a partial single group still requires model matching", async () => {
+	const { scheduler, events } = testScheduler([testAdapter(async () => testReport("test-a", ["claude"]))]);
+	try {
+		await scheduler.refreshActiveProvider({ model: { provider: "test-a", id: "gemini-4-hydrogen" } } as any);
+		assert.equal(events.at(-1).status, "unavailable");
+	} finally { scheduler.stop(); }
+});
+
+test("provider-wide windows use an explicit adapter policy", async () => {
+	const { scheduler, events } = testScheduler([
+		{ ...testAdapter(async () => testReport()), modelMatching: "all" },
+	]);
+	try {
+		await scheduler.refreshActiveProvider({ model: { provider: "test-a", id: "opaque-model-id" } } as any);
+		assert.equal(events.at(-1).status, "ready");
+	} finally { scheduler.stop(); }
+});
 
 test("formatCountdown formats ms into compact countdowns", () => {
 	assert.equal(formatCountdown(30_000), "30s");

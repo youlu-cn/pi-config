@@ -103,8 +103,8 @@ deploy_file() {
     return 0
   fi
 
-  # 检查是否已是正确的软链接
-  if [[ -L "${dest}" ]]; then
+  # Reuse matching links only when the requested installation mode is symlink.
+  if [[ "${MODE}" == "symlink" && -L "${dest}" ]]; then
     local current_target
     current_target="$(readlink "${dest}")"
     if [[ "${current_target}" == "${src}" ]]; then

@@ -7,6 +7,7 @@ export class GrokAdapter implements ProviderAdapter {
 	readonly id = "grok";
 	readonly displayName = "xAI Grok";
 	readonly supportedProviders = ["xai", "grok"];
+	readonly modelMatching = "all" as const;
 
 	isConfigured(ctx: ExtensionContext): boolean {
 		const auth = loadAuthStorage();
