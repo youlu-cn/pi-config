@@ -8,8 +8,8 @@
   "enabledModels": [
     "antigravity/gemini-4-hydrogen",
     "antigravity/gemini-4-argon",
-    "openai-codex/gpt-6-astra",
-    "openai-codex/gpt-6.1-sol",
+    "openai-codex/gpt-6.2-astra",
+    "openai-codex/gpt-6.2-sol",
     "openai-codex/gpt-6.1-terra",
     "openai-codex/gpt-6-luna",
     "deepseek/deepseek-v4-pro",
