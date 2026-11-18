@@ -4,6 +4,7 @@
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { truncateToWidth } from "@earendil-works/pi-tui";
 import {
 	AgentRunSummary,
 	formatSummaryDuration,
@@ -70,11 +71,7 @@ class AgentSummaryLine {
 	invalidate(): void {}
 
 	render(width: number): string[] {
-		const line = ` ${this.border} ${this.body}`;
-		if (width > 0 && line.length > width) {
-			return [`${line.slice(0, Math.max(0, width - 1))}…`];
-		}
-		return [line];
+		return [truncateToWidth(` ${this.border} ${this.body}`, width, "…")];
 	}
 }
 
