@@ -27,9 +27,13 @@ for (const force of [false, true]) {
 			write(join(harness, `plugin-configs/${name}/config.json`), '{"enabled":true}\n');
 			symlinkSync(`../../plugin-configs/${name}/config.json`, join(harness, `extensions/${name}/config.json`));
 		}
+		write(join(harness, "extensions/fast/index.ts"), "export default function () {}\n");
+		write(join(harness, "plugin-configs/fast/config.json"), '{"enabled":false}\n');
 		const run = (...args) => execFileSync("bash", [join(source, "install-harness.sh"), "--target", target, ...args], { encoding: "utf8" });
 		run();
 		assert.ok(lstatSync(join(target, "settings.json")).isSymbolicLink());
+		assert.ok(lstatSync(join(target, "extensions/fast")).isSymbolicLink());
+		assert.equal(readFileSync(join(target, "fast.json"), "utf8"), '{"enabled":false}\n');
 		run("--mode", "copy", ...(force ? ["--force"] : []));
 		assert.equal(lstatSync(join(target, "settings.json")).isSymbolicLink(), false);
 		for (const name of ["session-ui", "repo-cache-manager"]) {
@@ -44,5 +48,8 @@ for (const force of [false, true]) {
 			assert.equal(readFileSync(join(sourceExt, "config.json"), "utf8"), '{"enabled":true}\n');
 		}
 		assert.ok(existsSync(join(target, "repo-cache-manager.json")));
+		assert.equal(lstatSync(join(target, "extensions/fast")).isSymbolicLink(), false);
+		assert.equal(lstatSync(join(target, "fast.json")).isSymbolicLink(), false);
+		assert.equal(readFileSync(join(target, "fast.json"), "utf8"), '{"enabled":false}\n');
 	});
 }
