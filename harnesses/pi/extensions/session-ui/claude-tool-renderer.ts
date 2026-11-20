@@ -29,6 +29,10 @@ import type { AnimationStyle } from "./work-animation-core.ts";
 
 const activeAnimTimers = new Set<NodeJS.Timeout>();
 
+class ExpandedToolResult extends Container {
+	delegateComponent?: Component;
+}
+
 export interface ClaudeToolRendererOptions {
 	getStyle?: () => AnimationStyle;
 	getIntervalMs?: () => number;
@@ -366,9 +370,11 @@ export function registerClaudeToolRenderer(
 					}
 
 					const container =
-						context.lastComponent instanceof Container
+						context.lastComponent instanceof ExpandedToolResult
 							? context.lastComponent
-							: new Container();
+							: new ExpandedToolResult();
+					const previousDelegate = container.delegateComponent;
+					container.delegateComponent = undefined;
 					container.clear();
 					container.addChild(
 						new Text(`${pad}  ${theme.fg("dim", `└ (${hint})`)}`, 0, 0),
@@ -376,8 +382,13 @@ export function registerClaudeToolRenderer(
 
 					if (defaultRenderers?.renderResult) {
 						try {
-							const child = defaultRenderers.renderResult(result, options, theme, context);
-							if (child) {
+							// The default renderer must reuse its own component, not this wrapper.
+							const child = defaultRenderers.renderResult(result, options, theme, {
+								...context,
+								lastComponent: previousDelegate,
+							});
+							if (child && child !== container) {
+								container.delegateComponent = child;
 								container.addChild(child);
 								return container;
 							}
