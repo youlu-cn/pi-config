@@ -168,7 +168,7 @@ class ThinkingPreviewBlock implements Component {
 	private currentHeading(snap: ThinkingBlockSnapshot): string {
 		if (!snap.active) return snap.heading;
 		const elapsedMs = Math.max(0, Date.now() - (snap.startedAt ?? Date.now()));
-		const shimmer = renderShimmerText(snap.activeLabel, elapsedMs, this.theme as any);
+		const shimmer = renderShimmerText(snap.activeLabel, elapsedMs, this.theme);
 		const durationText = formatThoughtDuration(Math.max(1, elapsedMs));
 		return shimmer + this.style(` · ${durationText}`);
 	}
@@ -336,7 +336,7 @@ export function installCompactThinking(
 			: prototype.render;
 
 	let activeTheme: Theme | undefined;
-	let activeTui: { requestRender(force?: boolean): void } | undefined;
+	let requestRender: (() => void) | undefined;
 	let activeThinking: ActiveThinking | null = null;
 	let animationTimer: ReturnType<typeof setInterval> | undefined;
 	const completedDurations = new Map<string, number>();
@@ -348,7 +348,7 @@ export function installCompactThinking(
 		const intervalMs = Math.max(40, Math.min(config.animationIntervalMs, 60));
 		animationTimer = setInterval(() => {
 			if (!activeThinking) return;
-			activeTui?.requestRender();
+			requestRender?.();
 		}, intervalMs);
 		animationTimer.unref?.();
 	}
@@ -438,7 +438,7 @@ export function installCompactThinking(
 			if (active) {
 				const elapsed = activeThinking ? Math.max(1, Date.now() - activeThinking.startedAt) : 0;
 				heading =
-					renderShimmerText(label, elapsed, activeTheme as any) +
+					renderShimmerText(label, elapsed, activeTheme) +
 					(durationText ? styleFn(` · ${durationText}`) : "");
 			} else {
 				heading = styleFn(durationText ? `Thought for ${durationText}` : "Thought");
@@ -517,7 +517,7 @@ export function installCompactThinking(
 					completedPreview,
 					label,
 					active ? activeThinking?.startedAt : undefined,
-					() => activeTui?.requestRender(),
+					() => requestRender?.(),
 					resolveSnapshot,
 				),
 			);
@@ -586,26 +586,22 @@ export function installCompactThinking(
 	} satisfies PatchState;
 
 	pi.on("session_start", (_event, ctx) => {
-		if (ctx.hasUI) {
-			activeTheme = ctx.ui.theme as Theme;
-			try {
-				activeTui = (ctx.ui as { tui?: { requestRender(force?: boolean): void } }).tui;
-			} catch {
-				activeTui = undefined;
-			}
-		}
+		if (!ctx.hasUI || ctx.mode !== "tui") return;
+		activeTheme = ctx.ui.theme;
+		// The widget factory exposes the TUI without adding a visible row.
+		ctx.ui.setWidget("session-ui:thinking-animation", (tui) => {
+			requestRender = () => tui.requestRender();
+			return {
+				render: () => [],
+				invalidate() {},
+				dispose() { requestRender = undefined; },
+			};
+		}, { placement: "belowEditor" });
 	});
 
 	pi.on("message_update", (event, ctx) => {
 		if (!config.enabled) return;
-		if (ctx.hasUI) {
-			activeTheme = (ctx.ui.theme as Theme) ?? activeTheme;
-			try {
-				activeTui = (ctx.ui as { tui?: { requestRender(force?: boolean): void } }).tui ?? activeTui;
-			} catch {
-				/* ignore */
-			}
-		}
+		if (ctx.hasUI) activeTheme = ctx.ui.theme ?? activeTheme;
 		const evt = (event as { assistantMessageEvent?: { type?: string; partial?: AssistantMessage } })
 			.assistantMessageEvent;
 		if (!evt) return;
@@ -631,7 +627,7 @@ export function installCompactThinking(
 				if (self.lastMessage) self.updateContent(self.lastMessage);
 			}
 			ensureAnimation();
-			activeTui?.requestRender();
+			requestRender?.();
 		} else if (
 			evt.type === "thinking_end" ||
 			evt.type === "text_start" ||
@@ -651,7 +647,7 @@ export function installCompactThinking(
 					const self = latestComponent as unknown as AssistantInternals;
 					if (self.lastMessage) self.updateContent(self.lastMessage);
 				}
-				activeTui?.requestRender();
+				requestRender?.();
 			}
 		}
 	});
@@ -685,7 +681,7 @@ export function installCompactThinking(
 			if (animationTimer) clearInterval(animationTimer);
 			animationTimer = undefined;
 			activeTheme = undefined;
-			activeTui = undefined;
+			requestRender = undefined;
 			if (prototype.updateContent === installed) {
 				prototype.updateContent = original;
 			}
