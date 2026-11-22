@@ -2,19 +2,19 @@
   "$schema": "https://pi.dev/schemas/settings.schema.json",
   "theme": "claude-light/claude-dark",
   "defaultProvider": "antigravity",
-  "defaultModel": "gemini-4-hydrogen",
+  "defaultModel": "gemini-4-neon",
   "defaultThinkingLevel": "medium",
   "hideThinkingBlock": true,
   "enabledModels": [
+    "antigravity/gemini-4-neon",
     "antigravity/gemini-4-hydrogen",
     "antigravity/gemini-4-argon",
-    "antigravity/gemini-4-neon",
-    "openai-codex/gpt-6.2-astra",
-    "openai-codex/gpt-6.2-sol",
-    "openai-codex/gpt-6.1-terra",
     "openai-codex/gpt-6-luna",
-    "deepseek/deepseek-v4-pro",
+    "openai-codex/gpt-6.1-terra",
+    "openai-codex/gpt-6.2-sol",
+    "openai-codex/gpt-6.2-astra",
     "deepseek/deepseek-flash",
+    "deepseek/deepseek-v4-pro",
     "cursor/default"
   ],
   "tuiMode": "fullscreen",
@@ -42,9 +42,9 @@
     "npm:@sentiolabs/pi-frontend-design"
   ],
   "extensions": [],
-  "lastChangelogVersion": "1.5.2",
+  "lastChangelogVersion": "1.6.0",
   "extensionChangelogVersions": {
-    "{\"source\":\"npm:pi-web-access\",\"scope\":\"user\"}": "0.47.0",
-    "{\"source\":\"npm:pi-cursor-sdk\",\"scope\":\"user\"}": "0.5.41"
+    "{\"source\":\"npm:pi-web-access\",\"scope\":\"user\"}": "0.48.0",
+    "{\"source\":\"npm:pi-cursor-sdk\",\"scope\":\"user\"}": "0.5.46"
   }
 }
