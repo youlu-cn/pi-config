@@ -49,7 +49,7 @@
   - `defaultProvider: "antigravity"`：默认使用 Antigravity 提供商。
   - `defaultModel: "gemini-4-hydrogen"`：默认启动模型。
   - `defaultThinkingLevel: "medium"`：默认思考推理级别。
-  - `enabledModels`：快捷轮换与启用的模型列表（antigravity 的 gemini-4-hydrogen/argon、OpenAI Codex 的 gpt-6-astra / gpt-6.1-sol / gpt-6.1-terra / gpt-6-luna、deepseek 系列及 cursor/default）。
+  - `enabledModels`：快捷轮换与启用的模型列表（antigravity 的 gemini-4-neon/hydrogen/carbon、OpenAI Codex 的 gpt-6-astra / gpt-6.1-sol / gpt-6.1-terra / gpt-6-luna、deepseek 系列及 cursor/default）。
 - **编辑器与界面**：
   - `theme: "claude-light/claude-dark"`：Claude Code 风格自适应主题（浅色/深色终端自动切换，去除用户输入沉重色块，微弱弱化思考文本）。
   - `tuiMode: "fullscreen"`：全屏交互界面。

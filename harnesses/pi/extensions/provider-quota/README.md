@@ -39,7 +39,7 @@ provider-quota/
 - Only the latest refresh can update the statusline. Late responses after provider/model switches or scheduler shutdown cannot replace current usage.
 - Adapters default to `modelKeys` matching, even for a single returned group. Provider-wide adapters explicitly declare `modelMatching: "all"`.
 
-- On Google AI Pro, Argon has its own 7-day pool; Hydrogen (`gemini-4-hydrogen`, replacing 3.8 Flash) uses the original Gemini pool. Ultra tiers, identified by the returned tier ID/name, route Argon and Hydrogen to one shared pool. Reset timestamps and percentages remain API-derived; unknown tiers are not assumed to share pools.
+- Antigravity reports two quota pools: Gemini Models (shared by Carbon, Hydrogen, Neon, and legacy Argon) and Claude and GPT models. Obsolete standalone Argon summary groups are ignored to avoid duplicate weekly windows.
 
 - Statusline windows are attributed per model group. When switching to an unknown provider (e.g. `cursor`, `deepseek`) or an unmatched model group, the `usage` segment is cleared instead of showing stale quota from the previous model.
-- Antigravity queries `https://daily-cloudcode-pa.googleapis.com` first with the full CLI `User-Agent` fingerprint so all three quota groups (`Gemini Models`, `Claude and GPT models`, `Gemini 4 Argon`) and live `remainingFraction` values are returned accurately.
+- Antigravity queries `https://daily-cloudcode-pa.googleapis.com` first with the full CLI `User-Agent` and reads live `remainingFraction` values rather than fabricating 100% remaining.

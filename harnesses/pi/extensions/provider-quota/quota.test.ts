@@ -6,11 +6,9 @@ import { ClaudeAdapter } from "./adapters/claude.ts";
 import { AdapterRegistry } from "./registry.ts";
 import {
 	ANTIGRAVITY_3P_MODELS,
-	ANTIGRAVITY_ARGON_MODELS,
 	ANTIGRAVITY_GEMINI_MODELS,
 	buildAntigravityModelFallbackWindows,
 	buildAntigravityWindows,
-	hasSharedGemini4Pool,
 } from "./adapters/antigravity.ts";
 import { formatQuotaReport } from "./format.ts";
 import {
@@ -211,7 +209,7 @@ test("AdapterRegistry correctly routes providers to adapters", () => {
 	assert.equal(unknown, undefined);
 });
 
-test("Antigravity maps all three quota-summary groups onto windows", () => {
+test("Antigravity maps two summary pools and ignores the obsolete Argon group", () => {
 	const resetsAt = Date.now() + 3600_000;
 	const windows = buildAntigravityWindows(
 		[
@@ -269,7 +267,7 @@ test("Antigravity maps all three quota-summary groups onto windows", () => {
 		resetsAt,
 	);
 
-	assert.equal(windows.length, 5);
+	assert.equal(windows.length, 4);
 	assert.equal(
 		windows.filter((w) => w.groupId === ANTIGRAVITY_GEMINI_MODELS).length,
 		2,
@@ -278,10 +276,6 @@ test("Antigravity maps all three quota-summary groups onto windows", () => {
 		windows.filter((w) => w.groupId === ANTIGRAVITY_3P_MODELS).length,
 		2,
 	);
-	assert.equal(
-		windows.filter((w) => w.groupId === ANTIGRAVITY_ARGON_MODELS).length,
-		1,
-	);
 
 	const geminiLabels = windows
 		.filter((w) => w.groupId === ANTIGRAVITY_GEMINI_MODELS)
@@ -289,85 +283,41 @@ test("Antigravity maps all three quota-summary groups onto windows", () => {
 		.sort();
 	assert.deepEqual(geminiLabels, ["1w", "Gemini 5h"]);
 
-	const argon = windows.find((w) => w.groupId === ANTIGRAVITY_ARGON_MODELS);
-	assert.equal(argon?.remainingPercent, 65);
-	assert.equal(argon?.label, "Argon 1w");
-
-	const fallback = buildAntigravityModelFallbackWindows(
-		{
-			"gemini-3-8-flash": {
-				displayName: "Gemini 3.8 Flash",
-				quotaInfo: { remainingFraction: 0.85 },
-			},
-			"gemini-4-argon-high": {
-				displayName: "Gemini 4 Argon (High)",
-				quotaInfo: { remainingFraction: 0.65 },
-			},
-		},
-		resetsAt,
-	);
-	assert.equal(fallback.length, 2);
-});
-
-test("Antigravity keeps Pro Hydrogen in the original pool and Argon in its own 7d pool", () => {
-	const resetsAt = Date.now() + 7 * 86400_000;
-	const groups = [
-		{ displayName: "Gemini Models", buckets: [
-			{ bucketId: "gemini-5h", window: "5h", remainingFraction: 0.8 },
-			{ bucketId: "gemini-weekly", window: "weekly", remainingFraction: 0.6 },
-		] },
-		{ displayName: "Gemini 4 Argon", buckets: [
-			{ bucketId: "argon-7d", window: "7d", remainingFraction: 0.3,
-				resetTime: new Date(resetsAt).toISOString() },
-		] },
-	];
-	for (const ordered of [groups, [...groups].reverse()]) {
-		const windows = buildAntigravityWindows(ordered, resetsAt);
-		for (const id of ["gemini-4-hydrogen", "gemini-4-hydrogen-high", "gemini-3.8-flash"]) {
-			assert.deepEqual(matchQuotaWindowsForModel(windows, id).map((w) => w.remainingPercent), [80, 60]);
-		}
-		const argon = matchQuotaWindowsForModel(windows, "gemini-4-argon");
-		assert.equal(argon.length, 1);
-		assert.equal(argon[0].remainingPercent, 30);
-		assert.equal(argon[0].kind, "weekly");
-		assert.equal(argon[0].windowMinutes, 10080);
-		assert.equal(argon[0].label, "Argon 1w");
-		assert.equal(argon[0].resetsAt, resetsAt);
-
-		const shared = buildAntigravityWindows(ordered, resetsAt, true);
-		assert.deepEqual(matchQuotaWindowsForModel(shared, "gemini-4-hydrogen"),
-			matchQuotaWindowsForModel(shared, "gemini-4-argon"));
-		assert.equal(matchQuotaWindow(shared, "gemini-4-hydrogen")?.remainingPercent, 30);
+	for (const id of ["gemini-4-carbon-high", "gemini-4-hydrogen", "gemini-4-neon", "gemini-4-argon"]) {
+		const matched = matchQuotaWindowsForModel(windows, id);
+		assert.deepEqual(matched.map((w) => w.remainingPercent), [85, 68]);
+		assert.ok(matched.every((w) => w.resetsAt === resetsAt));
 	}
-	// Some shared-tier summaries expose only the original Gemini pool.
-	const shared = buildAntigravityWindows(groups.slice(0, 1), resetsAt, true);
-	assert.deepEqual(matchQuotaWindowsForModel(shared, "gemini-4-hydrogen"),
-		matchQuotaWindowsForModel(shared, "gemini-4-argon"));
+	for (const id of ["claude-opus-5-5", "gpt-oss-120b"]) {
+		assert.deepEqual(matchQuotaWindowsForModel(windows, id).map((w) => w.remainingPercent), [42, 80]);
+	}
 });
 
-test("Antigravity detects shared Ultra tiers without treating Pro or unknown tiers as shared", () => {
-	assert.equal(hasSharedGemini4Pool({ paidTier: { name: "Google AI Pro" } }), false);
-	assert.equal(hasSharedGemini4Pool({ paidTier: { id: "g1-ultra-tier" } }), true);
-	assert.equal(hasSharedGemini4Pool({ currentTier: { name: "Google AI Ultra" } }), true);
-	assert.equal(hasSharedGemini4Pool({}), false);
+test("Antigravity recognizes a shared Gemini summary even when its name mentions Argon", () => {
+	const windows = buildAntigravityWindows([
+		{ displayName: "Gemini 4 Argon / Hydrogen", buckets: [{ window: "weekly", remainingFraction: 0.61 }] },
+	], Date.now());
+	assert.equal(matchQuotaWindow(windows, "gemini-4-carbon")?.remainingPercent, 61);
 });
 
-test("Antigravity model fallback distinguishes Hydrogen and Argon, including shared tiers", () => {
+test("Antigravity catalog fallback reports one window per pool", () => {
 	const resetsAt = Date.now() + 7 * 86400_000;
 	const models = {
-		"gemini-4-hydrogen": { displayName: "Gemini 4 Hydrogen", quotaInfo: { remainingFraction: 0.8 } },
-		"gemini-4-argon": { displayName: "Gemini 4 Argon", quotaInfo: { remainingFraction: 0.3 } },
+		"gemini-4-carbon": { quotaInfo: { remainingFraction: 0.8, resetTime: new Date(resetsAt).toISOString() } },
+		"gemini-4-hydrogen": { quotaInfo: { remainingFraction: 0.8 } },
+		"gemini-4-argon": { quotaInfo: { remainingFraction: 0.8 } },
+		"claude-opus-5-5": { quotaInfo: { remainingFraction: 0.3 } },
+		"gpt-oss-120b": { quotaInfo: { remainingFraction: 0.3 } },
 	};
-	const pro = buildAntigravityModelFallbackWindows(models, resetsAt);
-	assert.equal(matchQuotaWindow(pro, "gemini-4-hydrogen")?.remainingPercent, 80);
-	assert.equal(matchQuotaWindow(pro, "gemini-4-argon")?.remainingPercent, 30);
-	for (const catalog of [models, { "gemini-4-hydrogen": models["gemini-4-hydrogen"] }]) {
-		const ultra = buildAntigravityModelFallbackWindows(catalog, resetsAt, true);
-		assert.equal(ultra.length, 1);
-		assert.deepEqual(matchQuotaWindowsForModel(ultra, "gemini-4-hydrogen"),
-			matchQuotaWindowsForModel(ultra, "gemini-4-argon"));
-		assert.equal(matchQuotaWindow(ultra, "gemini-4-argon")?.kind, "weekly");
+	const windows = buildAntigravityModelFallbackWindows(models, resetsAt - 1000);
+	assert.deepEqual(windows.map((w) => w.groupId), [ANTIGRAVITY_GEMINI_MODELS, ANTIGRAVITY_3P_MODELS]);
+	for (const id of ["gemini-4-carbon", "gemini-4-hydrogen", "gemini-4-argon"]) {
+		const quota = matchQuotaWindow(windows, id);
+		assert.equal(quota?.remainingPercent, 80);
+		assert.equal(quota?.kind, "weekly");
+		assert.equal(quota?.resetsAt, resetsAt);
 	}
+	assert.equal(matchQuotaWindow(windows, "gpt-oss-120b")?.remainingPercent, 30);
 });
 
 test("Antigravity does not fabricate windows when the summary has no data", () => {
@@ -402,13 +352,6 @@ test("model matching attributes windows to the right group or nothing", () => {
 			remainingPercent: 55,
 		}),
 		buildQuotaWindow({
-			kind: "weekly",
-			label: "Argon",
-			groupId: "gemini-argon",
-			modelKeys: ["argon", "gemini-4-argon", "gemini-4"],
-			remainingPercent: 70,
-		}),
-		buildQuotaWindow({
 			kind: "hourly",
 			label: "Claude 5h",
 			groupId: "claude-and-gpt-models",
@@ -426,7 +369,7 @@ test("model matching attributes windows to the right group or nothing", () => {
 	];
 
 	assert.equal(matchQuotaWindow(windows, "gemini-3.8-flash")?.groupId, "gemini-models");
-	assert.equal(matchQuotaWindow(windows, "gemini-4-argon")?.groupId, "gemini-argon");
+	assert.equal(matchQuotaWindow(windows, "gemini-4-carbon")?.groupId, "gemini-models");
 	assert.deepEqual(
 		matchQuotaWindowsForModel(windows, "claude-opus-5-5").map((w) => w.label),
 		["Claude 5h", "Claude 1w"],
@@ -440,13 +383,6 @@ test("model matching attributes windows to the right group or nothing", () => {
 
 test("statusline events clear the display for unknown providers and models", async () => {
 	const windows: QuotaWindow[] = [
-		buildQuotaWindow({
-			kind: "weekly",
-			label: "Argon",
-			groupId: "gemini-argon",
-			modelKeys: ["argon", "gemini-4-argon", "gemini-4"],
-			remainingPercent: 70,
-		}),
 		buildQuotaWindow({
 			kind: "weekly",
 			label: "Gemini",
@@ -495,12 +431,12 @@ test("statusline events clear the display for unknown providers and models", asy
 
 	// Known provider and matching model: broadcast remaining quota.
 	await scheduler.refreshActiveProvider({
-		model: { provider: "known", id: "gemini-4-argon" },
+		model: { provider: "known", id: "gemini-4-carbon" },
 	} as any);
 	assert.equal(events.at(-1)?.data.status, "ready");
 	assert.deepEqual(
 		events.at(-1)?.data.windows.map((w: QuotaWindow) => w.label),
-		["Argon"],
+		["Gemini"],
 	);
 });
 

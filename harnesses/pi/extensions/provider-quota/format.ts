@@ -94,9 +94,7 @@ export function formatQuotaReport(
 				? "Gemini Models"
 				: gId === "claude-and-gpt-models"
 					? "Claude and GPT models"
-					: gId === "gemini-argon"
-						? "Gemini 4 Argon"
-						: "Quota Windows");
+					: "Quota Windows");
 
 		let entry = groupsMap.get(gId);
 		if (!entry) {
