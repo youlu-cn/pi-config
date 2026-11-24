@@ -34,20 +34,45 @@ for (const force of [false, true]) {
 		assert.ok(lstatSync(join(target, "settings.json")).isSymbolicLink());
 		assert.ok(lstatSync(join(target, "extensions/fast")).isSymbolicLink());
 		assert.equal(readFileSync(join(target, "fast.json"), "utf8"), '{"enabled":false}\n');
-		run("--mode", "copy", ...(force ? ["--force"] : []));
-		assert.equal(lstatSync(join(target, "settings.json")).isSymbolicLink(), false);
-		for (const name of ["session-ui", "repo-cache-manager"]) {
-			const sourceExt = join(harness, "extensions", name);
-			const targetExt = join(target, "extensions", name);
-			assert.equal(lstatSync(targetExt).isSymbolicLink(), false);
-			assert.equal(lstatSync(join(targetExt, "config.json")).isSymbolicLink(), false);
-			assert.equal(readFileSync(join(targetExt, "config.json"), "utf8"), '{"enabled":true}\n');
-			assert.equal(readlinkSync(join(sourceExt, "config.json")), `../../plugin-configs/${name}/config.json`);
-			assert.deepEqual(readdirSync(sourceExt).sort(), ["config.json", "index.ts"]);
-			writeFileSync(join(targetExt, "config.json"), '{"enabled":false}\n');
-			assert.equal(readFileSync(join(sourceExt, "config.json"), "utf8"), '{"enabled":true}\n');
+		const disabledExt = join(target, "extensions/repo-cache-manager");
+		const disabledConfig = join(target, "repo-cache-manager.json");
+		assert.ok(!existsSync(disabledExt));
+		assert.ok(!existsSync(disabledConfig));
+
+		// Simulate an installation made before the extension was disabled.
+		const sourceExt = join(harness, "extensions/repo-cache-manager");
+		if (force) {
+			write(join(disabledExt, "index.ts"), "// Previously installed copy\n");
+		} else {
+			symlinkSync(sourceExt, disabledExt);
 		}
-		assert.ok(existsSync(join(target, "repo-cache-manager.json")));
+		write(disabledConfig, '{"custom":true}\n');
+		const copyArgs = ["--mode", "copy", ...(force ? ["--force"] : [])];
+		assert.match(run(...copyArgs, "--dry-run"), /\[DISABLE\].*repo-cache-manager/);
+		assert.ok(existsSync(disabledExt));
+		assert.ok(!readdirSync(target).some((name) => name.startsWith("disabled-")));
+
+		run(...copyArgs);
+		assert.ok(!existsSync(disabledExt));
+		assert.equal(readFileSync(disabledConfig, "utf8"), '{"custom":true}\n');
+		const backups = readdirSync(target).filter((name) => name.startsWith("disabled-repo-cache-manager."));
+		assert.equal(backups.length, 1);
+		const archivedExt = join(target, backups[0], "repo-cache-manager");
+		if (force) {
+			assert.equal(readFileSync(join(archivedExt, "index.ts"), "utf8"), "// Previously installed copy\n");
+		} else {
+			assert.equal(readlinkSync(archivedExt), sourceExt);
+		}
+		assert.equal(lstatSync(join(target, "settings.json")).isSymbolicLink(), false);
+		const sourceSessionUi = join(harness, "extensions/session-ui");
+		const targetSessionUi = join(target, "extensions/session-ui");
+		assert.equal(lstatSync(targetSessionUi).isSymbolicLink(), false);
+		assert.equal(lstatSync(join(targetSessionUi, "config.json")).isSymbolicLink(), false);
+		assert.equal(readFileSync(join(targetSessionUi, "config.json"), "utf8"), '{"enabled":true}\n');
+		assert.equal(readlinkSync(join(sourceSessionUi, "config.json")), "../../plugin-configs/session-ui/config.json");
+		assert.deepEqual(readdirSync(sourceSessionUi).sort(), ["config.json", "index.ts"]);
+		writeFileSync(join(targetSessionUi, "config.json"), '{"enabled":false}\n');
+		assert.equal(readFileSync(join(sourceSessionUi, "config.json"), "utf8"), '{"enabled":true}\n');
 		assert.equal(lstatSync(join(target, "extensions/fast")).isSymbolicLink(), false);
 		assert.equal(lstatSync(join(target, "fast.json")).isSymbolicLink(), false);
 		assert.equal(readFileSync(join(target, "fast.json"), "utf8"), '{"enabled":false}\n');

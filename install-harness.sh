@@ -143,6 +143,10 @@ deploy_file() {
   fi
 }
 
+is_extension_disabled() {
+  [[ "${HARNESS}" == "pi" && "$1" == "repo-cache-manager" ]]
+}
+
 # 1. 确保目标目录存在
 if [[ "${DRY_RUN}" == false ]]; then
   mkdir -p -m 700 "${TARGET_DIR}"
@@ -172,8 +176,22 @@ if [[ -d "${HARNESS_DIR}/extensions" ]]; then
   has_ext=false
   for ext in "${HARNESS_DIR}/extensions"/*; do
     if [[ -e "${ext}" && "$(basename "${ext}")" != ".gitkeep" ]]; then
-      has_ext=true
       ext_name="$(basename "${ext}")"
+      if is_extension_disabled "${ext_name}"; then
+        echo "  [SKIP] Disabled extension: ${ext_name}"
+        installed_ext="${TARGET_EXT_DIR}/${ext_name}"
+        if [[ -e "${installed_ext}" || -L "${installed_ext}" ]]; then
+          # Keep previous installs outside Pi's extension discovery directory, even with --force.
+          echo "  [DISABLE] Move ${installed_ext} to a backup under ${TARGET_DIR}"
+          if [[ "${DRY_RUN}" == false ]]; then
+            backup_dir="$(mktemp -d "${TARGET_DIR}/disabled-${ext_name}.XXXXXX")"
+            mv "${installed_ext}" "${backup_dir}/"
+            echo "  [BACKUP] ${backup_dir}/${ext_name}"
+          fi
+        fi
+        continue
+      fi
+      has_ext=true
       deploy_file "${ext}" "${TARGET_EXT_DIR}/${ext_name}"
     fi
   done
@@ -190,6 +208,9 @@ if [[ -d "${HARNESS_DIR}/plugin-configs" ]]; then
   for pdir in "${HARNESS_DIR}/plugin-configs"/*; do
     if [[ -d "${pdir}" && -f "${pdir}/config.json" ]]; then
       pname="$(basename "${pdir}")"
+      if is_extension_disabled "${pname}"; then
+        continue
+      fi
       if [[ "${pname}" == "session-ui" || "${pname}" == "repo-cache-manager" ]]; then
         # 如果已纳管 extensions/${pname} 目录，在 symlink 模式下内部软链接自然生效；
         # 在 copy 模式下，需要将真实配置文件覆盖复制到目标插件目录中，防止相对软链接断裂

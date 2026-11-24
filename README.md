@@ -75,7 +75,7 @@
   - `fast`：通过 `/fast [on|off|status]` 控制 OpenAI/Codex OAuth 模型的优先请求策略，默认关闭；详见 [Fast 说明](harnesses/pi/extensions/fast/README.zh-CN.md)。
   - `session-ui`：全功能 UI 增强扩展（包含定制状态栏 Statusline、回合结算摘要 Turn-Summary、紧凑粘贴 Compact-Paste、工具执行动效 Work-Animation、会话元数据控制器等）。
   - `provider-quota`：多 Provider 订阅配额与重置倒计时监控扩展（微内核调度器 + 插件化 Adapters 架构，对接 Antigravity、OpenAI/GPT、Claude、Grok 等）。
-  - `repo-cache-manager`：基于 Subagent 物理隔离（`scout` 只读侦察兵 + `architect` 架构规划师）与工作区扫描缓存挂载扩展，严禁篡改主会话模型，确保主模型 100% KV Cache 命中率。
+  - `repo-cache-manager`：基于 Subagent 物理隔离（`scout` 只读侦察兵 + `architect` 架构规划师）与工作区扫描缓存挂载扩展，严禁篡改主会话模型，确保主模型 100% KV Cache 命中率。安装时默认跳过；重新安装会将已有扩展移到目标目录下的 `disabled-repo-cache-manager.*` 备份目录，不删除已有配置。
 
 ### 2. 键位映射 (`harnesses/pi/config/keybindings.json`)
 
@@ -100,7 +100,7 @@
   - 映射目标：`~/.pi/agent/extensions/session-ui/config.json`
   - 精选 statusline 显示段：`model`, `effort`, `directory`, `branch`, `context`, `usage`, `cache`, `extensions`。
 - **`repo-cache-manager/config.json`**（对应架构缓存与 Subagent 扩展）：
-  - 映射目标：`~/.pi/agent/repo-cache-manager.json` 及 `~/.pi/agent/extensions/repo-cache-manager/config.json`
+  - 随扩展一起跳过部署；启用时映射到 `~/.pi/agent/repo-cache-manager.json` 及 `~/.pi/agent/extensions/repo-cache-manager/config.json`。
   - 自定义 `scoutModel`（默认 `antigravity/gemini-3.8-flash`）、`architectModel`（默认 `antigravity/gemini-4-argon`）及上下文保护阈值。
 - **`fast/config.json`**（对应 Fast 扩展）：
   - 映射目标：`~/.pi/agent/fast.json`；默认关闭，开关状态按 provider 保存在 `~/.pi/agent/state/fast.json`。
